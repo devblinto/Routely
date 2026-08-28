@@ -3,6 +3,7 @@ import "server-only";
 import type { Website } from "@/generated/prisma/client";
 import { Prisma } from "@/server/db";
 import { conflict, notFound } from "@/server/errors";
+import * as eventRepo from "@/server/repositories/event.repository";
 import * as websiteRepo from "@/server/repositories/website.repository";
 import { parseOrThrow } from "@/server/validate";
 import { createWebsiteSchema, updateWebsiteSchema } from "@/validation/website";
@@ -104,6 +105,18 @@ export async function rotatePublicSiteId(actorUserId: string, websiteId: string)
   });
 
   return getWebsite(actorUserId, websiteId);
+}
+
+/**
+ * Whether this website's tracking snippet has reported at least one event.
+ *
+ * This is the "pixel detected" state shown on the Get started guide and the dashboard: it has
+ * no separate stored flag, so it can never disagree with whether the snippet is actually
+ * running.
+ */
+export async function isPixelDetected(actorUserId: string, websiteId: string): Promise<boolean> {
+  await getWebsite(actorUserId, websiteId);
+  return eventRepo.hasEvents(websiteId);
 }
 
 /**

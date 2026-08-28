@@ -1,4 +1,4 @@
-import { FlaskConical, Globe, LayoutDashboard, type LucideIcon } from "lucide-react";
+import { FlaskConical, Globe, LayoutDashboard, Rocket, type LucideIcon } from "lucide-react";
 
 import { routes } from "@/lib/routes";
 
@@ -12,6 +12,7 @@ export interface NavItem {
 
 /** Shared by the desktop sidebar and the mobile drawer so the two can never disagree. */
 export const NAV_ITEMS: NavItem[] = [
+  { href: routes.getStarted, label: "Get started", icon: Rocket, exact: true },
   { href: routes.dashboard, label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: routes.websites.new, label: "Add website", icon: Globe },
   { href: "/experiments", label: "Experiments", icon: FlaskConical, exact: true },

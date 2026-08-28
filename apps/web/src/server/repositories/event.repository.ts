@@ -160,6 +160,23 @@ export function listRecentEvents(experimentId: string, limit = 50, client: DbCli
 }
 
 /**
+ * Whether the tracking snippet has ever reported an event for this website.
+ *
+ * Backs the "pixel detected" state on the Get started guide: rather than a separate
+ * installed/verified flag that could drift from reality, detection is derived from the one
+ * thing that actually proves the snippet is running — an event arrived. Served by the
+ * `[websiteId, createdAt]` index, so this is an index probe rather than a table scan.
+ */
+export async function hasEvents(websiteId: string, client: DbClient = db): Promise<boolean> {
+  const event = await client.event.findFirst({
+    where: { websiteId },
+    select: { id: true },
+  });
+
+  return event !== null;
+}
+
+/**
  * Deletes events older than `cutoff` for one website. The retention sweep is not scheduled in
  * the MVP; this exists so the `[websiteId, createdAt]` index has the caller it was added for.
  */

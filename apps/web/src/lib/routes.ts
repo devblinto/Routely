@@ -9,6 +9,7 @@ export const routes = {
   home: "/",
   login: "/login",
   dashboard: "/dashboard",
+  getStarted: "/get-started",
 
   websites: {
     new: "/websites/new",
@@ -28,7 +29,12 @@ export const routes = {
 } as const;
 
 /** Route prefixes that require an authenticated session. */
-export const PROTECTED_PREFIXES = ["/dashboard", "/websites", "/experiments"] as const;
+export const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/get-started",
+  "/websites",
+  "/experiments",
+] as const;
 
 export function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some(
