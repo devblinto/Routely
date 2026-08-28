@@ -1,0 +1,308 @@
+// Routely data model.
+//
+// Two rules govern this schema:
+//
+//  1. Every metric has exactly one source of truth. Visitor counts come from Assignment,
+//     page views and engagement from Event, conversions from Conversion. Nothing is
+//     denormalised into a counter column that could drift from the rows it summarises.
+//
+//  2. Aggregation never needs a join. Rows that the dashboard groups by variant carry
+//     `variant` (and `websiteId` where useful) directly, so every dashboard query is served
+//     by a covering index on the table it reads.
+//
+// Ownership always flows User → Website → Experiment → (Assignment | Event | Conversion),
+// and every cascade follows that same chain, so deleting a website removes its entire tree.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Authentication — shapes required by the Auth.js Prisma adapter (Part 2).
+// Field names and types are fixed by the adapter and must not be renamed.
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  websites Website[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Lifecycle of an experiment. Only ACTIVE experiments are published to the SDK.
+enum ExperimentStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+/// How a configured URL is compared against the visitor's current URL.
+enum UrlMatchType {
+  EXACT
+  PREFIX
+}
+
+/// Which arm of an experiment a visitor was assigned to.
+enum Variant {
+  CONTROL
+  VARIANT
+}
+
+/// Event taxonomy. Values are the literal strings the SDK sends on the wire, so the
+/// ingestion endpoint stores what it receives without a translation table.
+enum EventType {
+  page_view
+  assignment
+  time_on_page
+  conversion
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+/// A customer property. Owns experiments and visitors, and carries the public site id embedded
+/// in the tracking snippet.
+model Website {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  /// Primary domain, e.g. "acme.com". Used for the Origin soft-check on ingestion.
+  domain       String
+  /// Public identifier embedded in the install snippet ("rt_…"). An identifier, not a secret:
+  /// it is visible in page source by design and grants no access beyond appending events.
+  publicSiteId String   @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experiments Experiment[]
+  visitors    Visitor[]
+  events      Event[]
+
+  // Dashboard lists a user's websites newest-first.
+  @@index([userId, createdAt])
+  @@map("websites")
+}
+
+// ---------------------------------------------------------------------------
+// Experiments
+// ---------------------------------------------------------------------------
+
+/// A redirect test: visitors on `controlUrl` are split between staying put and being sent
+/// to `variantUrl`; reaching `conversionUrl` counts as a conversion.
+model Experiment {
+  id          String  @id @default(cuid())
+  websiteId   String
+  name        String
+  description String?
+
+  controlUrl       String
+  controlMatchType UrlMatchType @default(EXACT)
+  variantUrl       String
+
+  conversionUrl       String
+  conversionMatchType UrlMatchType @default(EXACT)
+
+  /// Percentage of traffic routed to the variant, 0–100. The MVP UI fixes this at 50; the
+  /// column is an integer so uneven splits need no migration.
+  variantSplit Int              @default(50)
+  status       ExperimentStatus @default(DRAFT)
+
+  /// Unguessable token for the public, read-only results page. Null when sharing is off, so
+  /// revoking a link is a matter of clearing it rather than maintaining a separate flag.
+  shareToken String?   @unique
+  sharedAt   DateTime?
+
+  publishedAt DateTime?
+  stoppedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  website     Website      @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
+  events      Event[]
+  conversions Conversion[]
+
+  // Serves the SDK config endpoint: "active experiments for this website".
+  @@index([websiteId, status])
+  // Serves the website detail page: experiments newest-first.
+  @@index([websiteId, createdAt])
+  @@map("experiments")
+}
+
+// ---------------------------------------------------------------------------
+// Tracking
+// ---------------------------------------------------------------------------
+
+/// A browser, identified by the opaque id the SDK stores in the visitor's own storage.
+/// Scoped to a website because the SDK mints one id per installed snippet, and because it
+/// keeps one customer's identifiers from colliding with another's.
+model Visitor {
+  id          String   @id @default(cuid())
+  websiteId   String
+  /// Client-generated UUID from the SDK. Never a user identifier and never PII.
+  anonymousId String
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  website     Website      @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
+  events      Event[]
+  conversions Conversion[]
+
+  /// Identity resolution on every ingested batch: one row per browser per website.
+  @@unique([websiteId, anonymousId])
+  @@index([websiteId, lastSeenAt])
+  @@map("visitors")
+}
+
+/// The binding of a visitor to one arm of one experiment. Created once and never changed,
+/// which is what makes a visitor's experience consistent across visits.
+model Assignment {
+  id           String   @id @default(cuid())
+  experimentId String
+  visitorId    String
+  variant      Variant
+  assignedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  experiment  Experiment   @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  visitor     Visitor      @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  events      Event[]
+  conversions Conversion[]
+
+  /// Assignment consistency: a visitor can never hold two arms of the same experiment.
+  /// Ingestion relies on this to make repeated assignment reports idempotent.
+  @@unique([experimentId, visitorId])
+  /// Visitor counts and conversion rates group by variant on this index alone.
+  @@index([experimentId, variant])
+  @@index([experimentId, assignedAt])
+  @@index([visitorId])
+  @@map("assignments")
+}
+
+/// Append-only activity log. Every row is written in the context of an assignment, so any
+/// event can be attributed to an arm without a join.
+model Event {
+  id           String    @id @default(cuid())
+  websiteId    String
+  experimentId String
+  visitorId    String
+  assignmentId String
+  variant      Variant
+  type         EventType
+  /// URL the event occurred on, normalised by the ingestion endpoint.
+  url          String
+  /// Foreground milliseconds. Set on `time_on_page` events only.
+  durationMs   Int?
+  /// Client clock, clamped server-side to a sane window.
+  occurredAt   DateTime
+  createdAt    DateTime  @default(now())
+
+  website    Website    @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  visitor    Visitor    @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  /// The dashboard's main aggregation path: per-experiment metrics by arm over a date range.
+  @@index([experimentId, type, variant, occurredAt])
+  /// Time-series charts for one experiment.
+  @@index([experimentId, occurredAt])
+  /// Website-wide activity and retention/pruning sweeps.
+  @@index([websiteId, createdAt])
+  @@index([assignmentId])
+  @@index([visitorId])
+  @@map("events")
+}
+
+/// A completed conversion goal. Kept separate from Event so conversion rate is a row count
+/// against a uniquely constrained table rather than a filtered scan with de-duplication.
+model Conversion {
+  id           String   @id @default(cuid())
+  experimentId String
+  visitorId    String
+  assignmentId String
+  variant      Variant
+  /// URL that satisfied the goal.
+  url          String
+  occurredAt   DateTime
+  createdAt    DateTime @default(now())
+
+  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  visitor    Visitor    @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  /// Conversion idempotency: one conversion per assignment. A visitor reloading the
+  /// thank-you page, or a duplicate beacon, cannot inflate the conversion count. The MVP has
+  /// a single goal per experiment, so assignment identity is the whole key; a multi-goal
+  /// model would extend this to [assignmentId, goalId].
+  @@unique([assignmentId])
+  /// Conversion counts group by variant on this index alone.
+  @@index([experimentId, variant])
+  @@index([experimentId, occurredAt])
+  @@index([visitorId])
+  @@map("conversions")
+}

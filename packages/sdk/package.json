@@ -1,0 +1,27 @@
+{
+  "name": "@routely/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Framework-independent browser tracking SDK for Routely redirect experiments.",
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./contract": "./src/contract.ts"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

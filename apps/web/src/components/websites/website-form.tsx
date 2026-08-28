@@ -1,0 +1,106 @@
+"use client";
+
+import { useActionState } from "react";
+import Link from "next/link";
+
+import { Field } from "@/components/common/field";
+import { SubmitButton } from "@/components/common/submit-button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { IDLE, type FormState } from "@/lib/form-state";
+
+/**
+ * Create/edit form for a website.
+ *
+ * One component serves both cases: the caller supplies the action and the existing values.
+ * Errors come back from the server through `useActionState` rather than being duplicated in
+ * client-side validation — the server's Zod schema is the only definition of what is valid,
+ * so the two can never disagree.
+ */
+export function WebsiteForm({
+  action,
+  websiteId,
+  defaultName = "",
+  defaultDomain = "",
+  submitLabel,
+  pendingLabel,
+  cancelHref,
+}: {
+  action: (state: FormState, formData: FormData) => Promise<FormState>;
+  /** Present when editing; sent back so the action knows which website to update. */
+  websiteId?: string;
+  defaultName?: string;
+  defaultDomain?: string;
+  submitLabel: string;
+  pendingLabel: string;
+  cancelHref?: string;
+}) {
+  const [state, formAction] = useActionState(action, IDLE);
+
+  return (
+    <form action={formAction} className="space-y-5">
+      {websiteId ? <input type="hidden" name="websiteId" value={websiteId} /> : null}
+
+      {state.status === "error" && state.message ? (
+        <Alert variant="destructive" role="alert">
+          <AlertTitle>Could not save</AlertTitle>
+          <AlertDescription>{state.message}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {state.status === "success" && state.message ? (
+        <Alert role="status">
+          <AlertDescription>{state.message}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <Field
+        name="name"
+        label="Name"
+        hint="Only used to identify this website inside Routely."
+        errors={state.fieldErrors?.["name"]}
+      >
+        {(props) => (
+          <Input
+            {...props}
+            defaultValue={defaultName}
+            placeholder="Acme Store"
+            maxLength={120}
+            autoComplete="off"
+            required
+          />
+        )}
+      </Field>
+
+      <Field
+        name="domain"
+        label="Domain"
+        hint="The domain the tracking snippet will run on. Pasting a full URL is fine — we keep the host."
+        errors={state.fieldErrors?.["domain"]}
+      >
+        {(props) => (
+          <Input
+            {...props}
+            defaultValue={defaultDomain}
+            placeholder="acme.com"
+            inputMode="url"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            required
+          />
+        )}
+      </Field>
+
+      <div className="flex flex-wrap gap-2 pt-1">
+        <SubmitButton pendingLabel={pendingLabel}>{submitLabel}</SubmitButton>
+        {cancelHref ? (
+          <Button variant="ghost" asChild>
+            <Link href={cancelHref}>Cancel</Link>
+          </Button>
+        ) : null}
+      </div>
+    </form>
+  );
+}

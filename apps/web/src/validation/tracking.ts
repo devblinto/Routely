@@ -1,0 +1,83 @@
+import { z } from "zod";
+
+import { EventType, Variant } from "@/generated/prisma/enums";
+import { absoluteUrlSchema, idSchema, publicSiteIdSchema } from "@/validation/common";
+
+/**
+ * Ingestion payload schemas.
+ *
+ * These describe data arriving from an untrusted browser on a public, unauthenticated
+ * endpoint, so every field is bounded: batch size, string lengths, and timestamp range. A
+ * payload that fails here is discarded rather than partially applied.
+ *
+ * The enums are derived from the Prisma enums, which use the same literal strings the SDK
+ * sends, so a wire value maps to a column value with no translation step.
+ */
+
+export const variantSchema = z.enum(Variant);
+export const eventTypeSchema = z.enum(EventType);
+
+/** Opaque visitor identifier minted by the SDK. Format-checked, never trusted as identity. */
+export const anonymousIdSchema = z
+  .string()
+  .trim()
+  .min(8, "Invalid visitor id")
+  .max(64, "Invalid visitor id")
+  .regex(/^[A-Za-z0-9_-]+$/, "Invalid visitor id");
+
+/** Upper bound on a single reported foreground interval: 6 hours. */
+const MAX_DURATION_MS = 6 * 60 * 60 * 1000;
+
+/** How far a client clock may deviate before its timestamp is rejected. */
+export const MAX_CLOCK_SKEW_PAST_MS = 24 * 60 * 60 * 1000;
+export const MAX_CLOCK_SKEW_FUTURE_MS = 5 * 60 * 1000;
+
+export const trackedEventSchema = z
+  .object({
+    experimentId: idSchema,
+    variant: variantSchema,
+    type: eventTypeSchema,
+    url: absoluteUrlSchema,
+    /** Foreground milliseconds; only meaningful on `time_on_page`. */
+    durationMs: z.number().int().min(0).max(MAX_DURATION_MS).optional(),
+    /** Client clock in epoch milliseconds. Clamped against server time during ingestion. */
+    ts: z.number().int().positive(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.type === "time_on_page" && value.durationMs === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["durationMs"],
+        message: "time_on_page events must report a duration",
+      });
+    }
+  });
+
+/** Cap on events per request, so one client cannot force an unbounded transaction. */
+export const MAX_EVENTS_PER_BATCH = 50;
+
+export const eventBatchSchema = z.object({
+  /** Wire protocol version; bumped when the payload shape changes incompatibly. */
+  v: z.literal(1),
+  siteId: publicSiteIdSchema,
+  visitorId: anonymousIdSchema,
+  events: z.array(trackedEventSchema).min(1).max(MAX_EVENTS_PER_BATCH),
+});
+
+/** Query parameters of the SDK config endpoint. */
+export const configRequestSchema = z.object({
+  siteId: publicSiteIdSchema,
+});
+
+export type TrackedEventInput = z.infer<typeof trackedEventSchema>;
+export type EventBatchInput = z.infer<typeof eventBatchSchema>;
+
+/**
+ * Clamps a client timestamp into a trustworthy window. Browser clocks are routinely wrong by
+ * hours; accepting them verbatim would scatter events across the time-series charts.
+ */
+export function clampClientTimestamp(ts: number, now: number = Date.now()): Date {
+  const earliest = now - MAX_CLOCK_SKEW_PAST_MS;
+  const latest = now + MAX_CLOCK_SKEW_FUTURE_MS;
+  return new Date(Math.min(Math.max(ts, earliest), latest));
+}

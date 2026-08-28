@@ -1,0 +1,45 @@
+{
+  "name": "routely",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Redirect URL testing platform \u2014 dashboard, API and tracking SDK.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @routely/web",
+    "build": "npm run build --workspace @routely/sdk && npm run build --workspace @routely/web",
+    "start": "npm run start --workspace @routely/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
+    "sdk:build": "npm run build --workspace @routely/sdk",
+    "db:up": "docker compose -f infra/docker-compose.dev.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.dev.yml down",
+    "db:generate": "npm run db:generate --workspace @routely/web",
+    "db:migrate": "npm run db:migrate --workspace @routely/web",
+    "db:deploy": "npm run db:deploy --workspace @routely/web",
+    "db:status": "npm run db:status --workspace @routely/web",
+    "db:reset": "npm run db:reset --workspace @routely/web",
+    "db:studio": "npm run db:studio --workspace @routely/web",
+    "db:seed": "npm run db:seed --workspace @routely/web",
+    "db:verify": "npm run db:verify --workspace @routely/web",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "unrs-resolver@1.12.2": true,
+    "prisma@7.10.0": true,
+    "@prisma/engines@7.10.0": true
+  }
+}
