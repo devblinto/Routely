@@ -81,12 +81,12 @@ export const displayNameSchema = z
   .min(1, "Required")
   .max(120, "Must be 120 characters or fewer");
 
-/** Percentage of traffic routed to the variant. */
-export const variantSplitSchema = z
+/** Percentage of visitors on the control page entered into an experiment at all. */
+export const trafficAllocationSchema = z
   .number()
   .int("Must be a whole number")
   .min(1, "Must be at least 1%")
-  .max(99, "Must be at most 99%");
+  .max(100, "Must be at most 100%");
 
 /** Inclusive date range used by dashboard queries. */
 export const dateRangeSchema = z

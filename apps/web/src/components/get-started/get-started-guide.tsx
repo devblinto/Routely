@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import Link from "next/link";
-import { Check } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 
 import { PlatformGrid } from "@/components/get-started/platform-grid";
 import { SubmitButton } from "@/components/common/submit-button";
@@ -47,6 +47,8 @@ export function GetStartedGuide({
   initialPixelDetected: boolean;
 }) {
   const [step, setStep] = useState<StepKey>(initialPixelDetected ? "done" : "install");
+  // Nothing is chosen by default — the WordPress instructions only appear once it is clicked.
+  const [platformSelected, setPlatformSelected] = useState(false);
 
   // Wrapping the action lets the guide advance to "done" the moment verification succeeds,
   // without a useEffect watching the result — the transition belongs with the action that
@@ -64,8 +66,11 @@ export function GetStartedGuide({
   const stepIndex = STEPS.findIndex((item) => item.key === step);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-      <nav aria-label="Setup guide" className="flex gap-2 lg:flex-col lg:gap-1">
+    <div className="flex h-full flex-col gap-6 overflow-hidden lg:flex-row">
+      <nav
+        aria-label="Setup guide"
+        className="flex shrink-0 gap-2 lg:w-[220px] lg:flex-col lg:gap-1"
+      >
         {STEPS.map((item, index) => {
           const completed = index < stepIndex;
           const current = index === stepIndex;
@@ -79,7 +84,7 @@ export function GetStartedGuide({
               onClick={() => setStep(item.key)}
               aria-current={current ? "step" : undefined}
               className={cn(
-                "flex flex-1 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors lg:flex-none",
+                "flex flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors lg:flex-none",
                 "outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed",
                 current
                   ? "bg-muted text-foreground"
@@ -107,24 +112,40 @@ export function GetStartedGuide({
         })}
       </nav>
 
-      <Card>
+      <Card className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         {step === "install" ? (
           <>
             <CardHeader>
-              <CardTitle>Install the tracking pixel</CardTitle>
+              <CardTitle>
+                {platformSelected ? "Install on WordPress" : "Install the tracking pixel"}
+              </CardTitle>
               <CardDescription>
-                Routely only ships a WordPress install today — every other platform below is
-                on the way.
+                {platformSelected
+                  ? "Paste this snippet into your site, then follow the placement rules below."
+                  : "Routely only ships a WordPress install today — every other platform below is on the way. Pick one to see its steps."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <PlatformGrid />
-              <div className="space-y-6 border-t border-border/70 pt-6">
-                <WordPressInstallGuide sdkUrl={sdkUrl} publicSiteId={website.publicSiteId} />
-                <PlacementRules />
-              </div>
+              {platformSelected ? (
+                <div className="space-y-6">
+                  <button
+                    type="button"
+                    onClick={() => setPlatformSelected(false)}
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <ArrowLeft className="size-3.5" aria-hidden />
+                    Back to platforms
+                  </button>
+                  <WordPressInstallGuide sdkUrl={sdkUrl} publicSiteId={website.publicSiteId} />
+                  <PlacementRules />
+                </div>
+              ) : (
+                <PlatformGrid selected={platformSelected} onSelect={() => setPlatformSelected(true)} />
+              )}
               <div className="flex justify-end">
-                <Button onClick={() => setStep("verify")}>Continue</Button>
+                <Button disabled={!platformSelected} onClick={() => setStep("verify")}>
+                  Continue
+                </Button>
               </div>
             </CardContent>
           </>
@@ -135,7 +156,8 @@ export function GetStartedGuide({
             <CardHeader>
               <CardTitle>Verify your installation</CardTitle>
               <CardDescription>
-                We&apos;ll check whether {website.domain} has sent any tracking data yet.
+                Enter a page on {website.domain} and we&apos;ll load it to confirm the snippet is
+                there.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -144,23 +166,35 @@ export function GetStartedGuide({
 
                 {state.status === "error" && state.message ? (
                   <Alert variant="destructive" role="alert">
-                    <AlertTitle>Pixel not detected</AlertTitle>
+                    <AlertTitle>Snippet not found</AlertTitle>
                     <AlertDescription>{state.message}</AlertDescription>
                   </Alert>
                 ) : null}
 
                 <div className="space-y-2">
-                  <Label htmlFor="verify-domain">Website</Label>
-                  <Input
-                    id="verify-domain"
-                    readOnly
-                    value={`https://${website.domain}`}
-                    className="text-muted-foreground"
-                  />
+                  <Label htmlFor="verify-url">Page to check</Label>
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      id="verify-url"
+                      name="url"
+                      defaultValue={`https://${website.domain}/`}
+                      placeholder={`https://${website.domain}/`}
+                      inputMode="url"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      required
+                      className="min-w-0 flex-1"
+                    />
+                    <SubmitButton pendingLabel="Checking…">Verify installation</SubmitButton>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Any page on {website.domain} that has the snippet. We load it and look for
+                    your site id in the HTML.
+                  </p>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <SubmitButton pendingLabel="Verifying…">Verify installation</SubmitButton>
                   <Button type="button" variant="ghost" onClick={() => setStep("install")}>
                     Back
                   </Button>
@@ -180,8 +214,8 @@ export function GetStartedGuide({
                 <CardTitle>You&apos;re all set</CardTitle>
               </div>
               <CardDescription>
-                {website.name} is receiving tracking data. Create an experiment whenever
-                you&apos;re ready.
+                The snippet is live on {website.name}. It starts recording as soon as an
+                experiment is running on a page it covers — create one whenever you&apos;re ready.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -190,7 +224,7 @@ export function GetStartedGuide({
                   <Link href={routes.experiments.new(website.id)}>Create an experiment</Link>
                 </Button>
                 <Button variant="outline" asChild>
-                  <Link href={routes.dashboard}>Go to dashboard</Link>
+                  <Link href={routes.websites.detail(website.id)}>View website</Link>
                 </Button>
               </div>
             </CardContent>

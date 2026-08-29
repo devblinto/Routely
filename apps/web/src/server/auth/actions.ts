@@ -13,13 +13,13 @@ import { signIn, signOut } from "@/server/auth";
  * redirect targets and error handling are decided once.
  */
 
-/** Where to send the user after signing in, defaulting to the dashboard. */
+/** Where to send the user after signing in, defaulting to their experiments. */
 function safeCallbackUrl(value: FormDataEntryValue | null): string {
-  if (typeof value !== "string") return routes.dashboard;
+  if (typeof value !== "string") return routes.experiments.list;
 
   // Only same-site relative paths. `//evil.example` is a protocol-relative URL that a naive
   // `startsWith("/")` check would accept as internal.
-  return value.startsWith("/") && !value.startsWith("//") ? value : routes.dashboard;
+  return value.startsWith("/") && !value.startsWith("//") ? value : routes.experiments.list;
 }
 
 /**

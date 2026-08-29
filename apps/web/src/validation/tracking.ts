@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { EventType, Variant } from "@/generated/prisma/enums";
+import { SDK_PROTOCOL_VERSION } from "@routely/sdk/contract";
+import { EventType } from "@/generated/prisma/enums";
 import { absoluteUrlSchema, idSchema, publicSiteIdSchema } from "@/validation/common";
 
 /**
@@ -10,11 +11,13 @@ import { absoluteUrlSchema, idSchema, publicSiteIdSchema } from "@/validation/co
  * endpoint, so every field is bounded: batch size, string lengths, and timestamp range. A
  * payload that fails here is discarded rather than partially applied.
  *
- * The enums are derived from the Prisma enums, which use the same literal strings the SDK
- * sends, so a wire value maps to a column value with no translation step.
+ * `EventType` is derived from the Prisma enum, which uses the same literal strings the SDK
+ * sends, so a wire value maps to a column value with no translation step. `variantId` has no
+ * equivalent enum to derive from — it's a real id (or `null` for control) checked for shape
+ * only; ownership (does it belong to *this* experiment) is verified in the ingestion service,
+ * which is the layer that actually has the experiment's variant list to check it against.
  */
 
-export const variantSchema = z.enum(Variant);
 export const eventTypeSchema = z.enum(EventType);
 
 /** Opaque visitor identifier minted by the SDK. Format-checked, never trusted as identity. */
@@ -35,7 +38,7 @@ export const MAX_CLOCK_SKEW_FUTURE_MS = 5 * 60 * 1000;
 export const trackedEventSchema = z
   .object({
     experimentId: idSchema,
-    variant: variantSchema,
+    variantId: idSchema.nullable(),
     type: eventTypeSchema,
     url: absoluteUrlSchema,
     /** Foreground milliseconds; only meaningful on `time_on_page`. */
@@ -57,8 +60,15 @@ export const trackedEventSchema = z
 export const MAX_EVENTS_PER_BATCH = 50;
 
 export const eventBatchSchema = z.object({
-  /** Wire protocol version; bumped when the payload shape changes incompatibly. */
-  v: z.literal(1),
+  /**
+   * Wire protocol version, taken from the contract rather than written out here.
+   *
+   * A hand-copied number is a version mismatch waiting to happen, and this one is invisible
+   * when it breaks: a batch that fails this check is discarded silently by `ingest`, so a stale
+   * literal drops every event with no error anywhere. Importing the constant makes a bump
+   * update both ends at once.
+   */
+  v: z.literal(SDK_PROTOCOL_VERSION),
   siteId: publicSiteIdSchema,
   visitorId: anonymousIdSchema,
   events: z.array(trackedEventSchema).min(1).max(MAX_EVENTS_PER_BATCH),

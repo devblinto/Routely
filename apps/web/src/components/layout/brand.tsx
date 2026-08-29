@@ -12,12 +12,15 @@ import { cn } from "@/lib/utils";
  */
 export function Brand({
   className,
-  href = routes.dashboard,
+  href = routes.experiments.list,
   size = "sm",
+  showLabel = true,
 }: {
   className?: string;
   href?: string;
   size?: "sm" | "lg";
+  /** Hidden by the collapsed sidebar, which only has room for the mark. */
+  showLabel?: boolean;
 }) {
   const large = size === "lg";
 
@@ -33,13 +36,21 @@ export function Brand({
     >
       <span
         className={cn(
-          "grid place-items-center rounded-xl bg-primary text-primary-foreground",
+          "grid shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground",
           large ? "size-10 shadow-sm" : "size-7 rounded-md",
         )}
       >
         <Split className={large ? "size-5" : "size-4"} aria-hidden />
       </span>
-      Routely
+      {/* Always rendered so the collapse animates as a width/opacity fade instead of a snap. */}
+      <span
+        className={cn(
+          "overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-in-out",
+          showLabel ? "max-w-[120px] opacity-100" : "max-w-0 opacity-0",
+        )}
+      >
+        Routely
+      </span>
     </Link>
   );
 }

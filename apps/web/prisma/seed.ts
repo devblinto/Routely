@@ -16,7 +16,6 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "../src/generated/prisma/client";
-import type { Variant } from "../src/generated/prisma/client";
 
 const connectionString = process.env["DATABASE_URL"];
 
@@ -28,12 +27,6 @@ const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 const SEED_USER_EMAIL = "dev@routely.local";
 const SEED_PUBLIC_SITE_ID = "rt_000000000000000000000000000000ab";
-
-/** Visitors per arm, and how many of each convert. Fixed so metrics are reproducible. */
-const PLAN: Record<Variant, { visitors: number; conversions: number }> = {
-  CONTROL: { visitors: 40, conversions: 4 },
-  VARIANT: { visitors: 40, conversions: 7 },
-};
 
 async function main() {
   const user = await db.user.upsert({
@@ -57,6 +50,7 @@ async function main() {
   // website rather than upserting blindly.
   const existing = await db.experiment.findFirst({
     where: { websiteId: website.id, name: "Pricing page redesign" },
+    include: { variants: true },
   });
 
   const experiment =
@@ -67,24 +61,32 @@ async function main() {
         name: "Pricing page redesign",
         description: "Does the rebuilt pricing page convert better than the original?",
         controlUrl: "https://acme.test/pricing",
-        variantUrl: "https://acme.test/pricing-v2",
         conversionUrl: "https://acme.test/checkout/thank-you",
-        variantSplit: 50,
         status: "ACTIVE",
         publishedAt: new Date(),
+        variants: { create: [{ position: 1, url: "https://acme.test/pricing-v2" }] },
       },
+      include: { variants: true },
     }));
+
+  const variant = experiment.variants[0]!;
+
+  /** Visitors per arm, and how many of each convert. Fixed so metrics are reproducible. */
+  const PLAN = [
+    { variantId: null as string | null, label: "control", visitors: 40, conversions: 4 },
+    { variantId: variant.id, label: "variant", visitors: 40, conversions: 7 },
+  ];
 
   const now = Date.now();
   let created = 0;
 
-  for (const [variant, plan] of Object.entries(PLAN) as [Variant, (typeof PLAN)[Variant]][]) {
+  for (const plan of PLAN) {
     for (let index = 0; index < plan.visitors; index += 1) {
-      const anonymousId = `seed-${variant.toLowerCase()}-${String(index).padStart(3, "0")}`;
+      const anonymousId = `seed-${plan.label}-${String(index).padStart(3, "0")}`;
       // Spread visitors over the last 14 days so time-series charts have a shape.
       const seenAt = new Date(now - ((index * 37) % (14 * 24 * 60 * 60 * 1000)));
 
-      const visitor = await db.visitor.upsert({
+      const visitorRow = await db.visitor.upsert({
         where: { websiteId_anonymousId: { websiteId: website.id, anonymousId } },
         create: {
           websiteId: website.id,
@@ -97,18 +99,18 @@ async function main() {
 
       const assignment = await db.assignment.upsert({
         where: {
-          experimentId_visitorId: { experimentId: experiment.id, visitorId: visitor.id },
+          experimentId_visitorId: { experimentId: experiment.id, visitorId: visitorRow.id },
         },
         create: {
           experimentId: experiment.id,
-          visitorId: visitor.id,
-          variant,
+          visitorId: visitorRow.id,
+          variantId: plan.variantId,
           assignedAt: seenAt,
         },
         update: {},
       });
 
-      const pageUrl = variant === "CONTROL" ? experiment.controlUrl : experiment.variantUrl;
+      const pageUrl = plan.variantId === null ? experiment.controlUrl : variant.url;
 
       // Events are append-only and carry no natural key, so the seed only writes them for
       // assignments it has just created.
@@ -120,9 +122,9 @@ async function main() {
             {
               websiteId: website.id,
               experimentId: experiment.id,
-              visitorId: visitor.id,
+              visitorId: visitorRow.id,
               assignmentId: assignment.id,
-              variant,
+              variantId: plan.variantId,
               type: "assignment",
               url: pageUrl,
               occurredAt: seenAt,
@@ -130,9 +132,9 @@ async function main() {
             {
               websiteId: website.id,
               experimentId: experiment.id,
-              visitorId: visitor.id,
+              visitorId: visitorRow.id,
               assignmentId: assignment.id,
-              variant,
+              variantId: plan.variantId,
               type: "page_view",
               url: pageUrl,
               occurredAt: seenAt,
@@ -140,9 +142,9 @@ async function main() {
             {
               websiteId: website.id,
               experimentId: experiment.id,
-              visitorId: visitor.id,
+              visitorId: visitorRow.id,
               assignmentId: assignment.id,
-              variant,
+              variantId: plan.variantId,
               type: "time_on_page",
               url: pageUrl,
               durationMs: 8_000 + ((index * 911) % 45_000),
@@ -160,9 +162,9 @@ async function main() {
           data: [
             {
               experimentId: experiment.id,
-              visitorId: visitor.id,
+              visitorId: visitorRow.id,
               assignmentId: assignment.id,
-              variant,
+              variantId: plan.variantId,
               url: experiment.conversionUrl,
               occurredAt: convertedAt,
             },
@@ -175,9 +177,9 @@ async function main() {
             data: {
               websiteId: website.id,
               experimentId: experiment.id,
-              visitorId: visitor.id,
+              visitorId: visitorRow.id,
               assignmentId: assignment.id,
-              variant,
+              variantId: plan.variantId,
               type: "conversion",
               url: experiment.conversionUrl,
               occurredAt: convertedAt,

@@ -5,16 +5,17 @@ import type { ConfigResponse } from "../src/contract";
 import { createMemoryStore } from "../src/env";
 
 const VALID: ConfigResponse = {
-  v: 1,
+  v: 3,
   siteId: "rt_abc",
   ttl: 60,
   experiments: [
     {
       id: "exp_1",
       control: { url: "https://acme.test/pricing", match: "EXACT" },
-      variantUrl: "https://acme.test/pricing-v2",
+      controlWeight: 50,
+      variants: [{ id: "var_1", url: "https://acme.test/pricing-v2", weight: 50 }],
       goal: { url: "https://acme.test/thanks", match: "EXACT" },
-      variantSplit: 50,
+      trafficAllocation: 100,
     },
   ],
 };
@@ -25,7 +26,13 @@ describe("isConfigResponse", () => {
   });
 
   it("rejects a payload from a different protocol version", () => {
-    expect(isConfigResponse({ ...VALID, v: 2 })).toBe(false);
+    expect(isConfigResponse({ ...VALID, v: 1 })).toBe(false);
+  });
+
+  it("rejects an experiment with no variants", () => {
+    expect(
+      isConfigResponse({ ...VALID, experiments: [{ ...VALID.experiments[0], variants: [] }] }),
+    ).toBe(false);
   });
 
   it("rejects anything that is not a config", () => {

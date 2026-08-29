@@ -52,11 +52,11 @@ export default async function WebsitePage({ params }: { params: Promise<{ websit
       <PageHeader
         eyebrow={
           <Link
-            href={routes.dashboard}
+            href={routes.experiments.list}
             className="inline-flex items-center gap-1 hover:text-foreground"
           >
             <ArrowLeft className="size-3.5" aria-hidden />
-            Websites
+            Experiments
           </Link>
         }
         title={website.name}

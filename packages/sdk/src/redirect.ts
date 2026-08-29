@@ -1,4 +1,4 @@
-import type { ExperimentConfig, VariantKey } from "./contract";
+import type { ExperimentConfig } from "./contract";
 import { type KeyValueStore, getSessionStorage } from "./env";
 import { isSameUrl, readHandoff, urlMatches, withHandoff } from "./url";
 
@@ -17,11 +17,16 @@ const REDIRECTED_PREFIX = "routely_r_";
 const MAX_REDIRECTS_PER_SESSION = 1;
 
 export type SkipReason =
-  "no-match" | "already-on-variant" | "arrived-by-redirect" | "already-redirected" | "same-url";
+  | "no-match"
+  | "excluded"
+  | "already-on-variant"
+  | "arrived-by-redirect"
+  | "already-redirected"
+  | "same-url";
 
 export type RedirectDecision =
-  | { action: "stay"; experiment: ExperimentConfig; variant: VariantKey }
-  | { action: "redirect"; experiment: ExperimentConfig; variant: VariantKey; target: string }
+  | { action: "stay"; experiment: ExperimentConfig; variantId: null }
+  | { action: "redirect"; experiment: ExperimentConfig; variantId: string; target: string }
   | { action: "skip"; experiment: ExperimentConfig; reason: SkipReason };
 
 export function redirectedKey(experimentId: string): string {
@@ -51,7 +56,7 @@ export function recordRedirect(experimentId: string, store: KeyValueStore | null
 /**
  * Finds the active experiment that claims the current page.
  *
- * Only the **control** URL is matched. The variant is never a trigger, which is the first and
+ * Only the **control** URL is matched. A variant is never a trigger, which is the first and
  * most important reason a variant page cannot start the cycle again.
  */
 export function findExperimentForUrl(
@@ -69,11 +74,15 @@ export function findExperimentForUrl(
 /**
  * Decides what to do on this page load.
  *
+ * Checked first, before any of the four loop guards below: **traffic allocation.** A visitor
+ * `includedFor` finds not part of the experiment is skipped immediately — no arm is drawn, so
+ * no assignment is ever created for them, and nothing about them is reported.
+ *
  * The four loop guards, in the order they are checked:
  *
- *  1. **Already on the variant.** With `PREFIX` matching a variant can sit underneath its own
+ *  1. **Already on a variant.** With `PREFIX` matching a variant can sit underneath its own
  *     control — `/pricing` claiming `/pricing/v2` — so matching the control is not enough to
- *     prove this is the control page.
+ *     prove this is the control page. Checked against every variant, not just one.
  *  2. **Arrived by redirect.** The handoff parameters in the URL say this page load *is* the
  *     result of this experiment's redirect. Survives a reload of the variant page, and works
  *     across origins where storage does not.
@@ -85,13 +94,18 @@ export function findExperimentForUrl(
 export function decide(
   href: string,
   experiments: ExperimentConfig[],
-  variantFor: (experiment: ExperimentConfig) => VariantKey,
+  variantFor: (experiment: ExperimentConfig) => string | null,
   context: { visitorId: string; sessionStore?: KeyValueStore | null },
+  includedFor: (experiment: ExperimentConfig) => boolean = () => true,
 ): RedirectDecision | null {
   const experiment = findExperimentForUrl(href, experiments);
   if (!experiment) return null;
 
-  if (isSameUrl(href, experiment.variantUrl)) {
+  if (!includedFor(experiment)) {
+    return { action: "skip", experiment, reason: "excluded" };
+  }
+
+  if (experiment.variants.some((variant) => isSameUrl(href, variant.url))) {
     return { action: "skip", experiment, reason: "already-on-variant" };
   }
 
@@ -106,22 +120,28 @@ export function decide(
     return { action: "skip", experiment, reason: "already-redirected" };
   }
 
-  const variant = variantFor(experiment);
-  if (variant === "CONTROL") {
-    return { action: "stay", experiment, variant };
+  const variantId = variantFor(experiment);
+  const targetVariant = variantId === null ? null : experiment.variants.find((v) => v.id === variantId);
+
+  // A non-null variantId that matches nothing in this experiment's own variant list would be
+  // a corrupted or stale assignment (never possible from a correctly-behaving caller, since a
+  // live experiment's variant set is immutable once active) — the safe response is to treat it
+  // as control rather than redirect to an undefined target.
+  if (variantId === null || !targetVariant) {
+    return { action: "stay", experiment, variantId: null };
   }
 
-  const target = withHandoff(experiment.variantUrl, {
+  const target = withHandoff(targetVariant.url, {
     visitorId: context.visitorId,
     experimentId: experiment.id,
-    variant,
+    variant: targetVariant.id,
   });
 
   if (isSameUrl(target, href)) {
     return { action: "skip", experiment, reason: "same-url" };
   }
 
-  return { action: "redirect", experiment, variant, target };
+  return { action: "redirect", experiment, variantId: targetVariant.id, target };
 }
 
 /**

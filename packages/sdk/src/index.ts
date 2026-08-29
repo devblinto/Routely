@@ -39,8 +39,9 @@ import {
   createEngagementTimer,
 } from "./engagement";
 import { SDK_PROTOCOL_VERSION } from "./contract";
-import type { ConfigResponse, VariantKey } from "./contract";
+import type { ConfigResponse } from "./contract";
 import { type Identity, resolveIdentity } from "./identity";
+import { resolveInclusion } from "./inclusion";
 import { decide, performRedirect } from "./redirect";
 import { sendConversion, sendPageEvents, sendTimeOnPage } from "./track";
 import { DEFAULT_TIMEOUT_MS } from "./transport";
@@ -49,7 +50,8 @@ import { normalizeUrl, readHandoff, stripHandoff } from "./url";
 export * from "./contract";
 export { resolveIdentity, isValidVisitorId } from "./identity";
 export { loadConfig, isConfigResponse } from "./config";
-export { resolveAssignment, drawVariant, readAssignment } from "./assignment";
+export { resolveAssignment, drawArm, readAssignment } from "./assignment";
+export { resolveInclusion, readInclusion } from "./inclusion";
 export { decide, findExperimentForUrl } from "./redirect";
 export { normalizeUrl, urlMatches, isSameUrl, withHandoff, readHandoff } from "./url";
 export { claimPageView } from "./dedupe";
@@ -83,8 +85,8 @@ export interface RoutelyState {
   experiments: ConfigResponse["experiments"];
   /** True when the configuration could not be loaded — the SDK then does nothing. */
   degraded: boolean;
-  /** The experiment claiming this page, and the arm the visitor is in. */
-  assignment: { experimentId: string; variant: VariantKey } | null;
+  /** The experiment claiming this page, and the arm the visitor is in (`null` is control). */
+  assignment: { experimentId: string; variantId: string | null } | null;
   /** What the SDK did on this page load. */
   action: "none" | "stay" | "redirect" | "skip";
   /** True when this page load handed events to the browser for delivery. */
@@ -200,20 +202,22 @@ export async function boot(): Promise<RoutelyState | null> {
   // experiment where those URLs coincide — so the two cannot compete.
   recordConversions(options, state, stores, href, log);
 
+  // A decision carried in from a redirect seeds the assignment on this origin, where storage
+  // from the previous one is unavailable. `undefined` (not `null`) means "no forced value" —
+  // `null` is itself meaningful now (forced to control), so the two cannot share one sentinel.
+  const forcedVariantId = (experiment: { id: string }): string | null | undefined =>
+    handoff && handoff.experimentId === experiment.id ? handoff.variant : undefined;
+
   const decision = decide(
     href,
     state.experiments,
     (experiment) =>
-      resolveAssignment(experiment, stores, {
-        // A decision carried in from a redirect seeds the assignment on this origin, where
-        // storage from the previous one is unavailable. `resolveAssignment` applies it only
-        // when nothing is stored, so a query string can never move an existing visitor.
-        forced:
-          handoff && handoff.experimentId === experiment.id
-            ? (handoff.variant as VariantKey)
-            : null,
-      }).variant,
+      // `resolveAssignment` applies `forced` only when nothing is stored, so a query string
+      // can never move an existing visitor.
+      resolveAssignment(experiment, stores, { forced: forcedVariantId(experiment) }).variantId,
     { visitorId: identity.id },
+    (experiment) =>
+      resolveInclusion(experiment.id, experiment.trafficAllocation, stores).included,
   );
 
   if (!decision) {
@@ -225,19 +229,25 @@ export async function boot(): Promise<RoutelyState | null> {
 
   if (decision.action === "skip") {
     log(`skipping ${decision.experiment.id}: ${decision.reason}`);
-    // An assignment still exists for a visitor already on the variant; surface it so the state
+
+    if (decision.reason === "excluded") {
+      // Not part of the experiment at all: no assignment was ever drawn for them, so there is
+      // nothing to surface and nothing to report.
+      return publish();
+    }
+
+    // An assignment still exists for a visitor already on a variant; surface it so the state
     // is honest about which arm they are in even when nothing happened this page load.
     const stored = resolveAssignment(decision.experiment, stores, {
-      forced:
-        handoff?.experimentId === decision.experiment.id ? (handoff.variant as VariantKey) : null,
+      forced: forcedVariantId(decision.experiment),
     });
-    state.assignment = { experimentId: decision.experiment.id, variant: stored.variant };
+    state.assignment = { experimentId: decision.experiment.id, variantId: stored.variantId };
     report(options, state, stores, href);
     trackEngagement(options, state, href);
     return publish();
   }
 
-  state.assignment = { experimentId: decision.experiment.id, variant: decision.variant };
+  state.assignment = { experimentId: decision.experiment.id, variantId: decision.variantId };
 
   // Reported before navigating: `sendBeacon` survives the unload, so the events are not lost
   // to the redirect that immediately follows them.
@@ -249,7 +259,7 @@ export async function boot(): Promise<RoutelyState | null> {
     return publish();
   }
 
-  log(`staying on the control page (${decision.variant})`);
+  log(`staying on the control page (${decision.variantId ?? "control"})`);
   trackEngagement(options, state, href);
   return publish();
 }
@@ -266,7 +276,7 @@ function trackEngagement(options: RoutelyOptions, state: RoutelyState, href: str
   if (!state.assignment || typeof document === "undefined") return;
 
   const url = normalizeUrl(href) ?? href;
-  const { experimentId, variant } = state.assignment;
+  const { experimentId, variantId } = state.assignment;
 
   const timer = createEngagementTimer({
     visible: document.visibilityState !== "hidden",
@@ -281,7 +291,7 @@ function trackEngagement(options: RoutelyOptions, state: RoutelyState, href: str
       state.visitorId,
       {
         experimentId,
-        variant,
+        variantId,
         url,
       },
       durationMs,
@@ -326,10 +336,10 @@ function recordConversions(
       continue;
     }
 
-    log(`conversion for ${experiment.id} (${assignment.variant})`);
+    log(`conversion for ${experiment.id} (${assignment.variantId ?? "control"})`);
     sendConversion(options.apiBase, options.siteId, state.visitorId, {
       experimentId: experiment.id,
-      variant: assignment.variant,
+      variantId: assignment.variantId,
       url,
     });
 
@@ -355,7 +365,7 @@ function report(
   if (!state.assignment) return;
 
   const url = normalizeUrl(href) ?? href;
-  const { experimentId, variant } = state.assignment;
+  const { experimentId, variantId } = state.assignment;
 
   const stored = readAssignment(experimentId, stores);
   const includeAssignment = stored ? !stored.sent : true;
@@ -367,7 +377,7 @@ function report(
     options.apiBase,
     options.siteId,
     state.visitorId,
-    { experimentId, variant, url },
+    { experimentId, variantId, url },
     { includeAssignment, includePageView },
   );
 

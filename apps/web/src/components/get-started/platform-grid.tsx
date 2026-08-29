@@ -34,35 +34,55 @@ const PLATFORMS: Platform[] = [
 ];
 
 /**
- * Platform picker for the install step. Every tile beyond WordPress is disabled and labelled
- * "Coming soon" — shown so the guide reads like a roadmap, not hidden, but not clickable.
+ * Platform picker for the install step. WordPress is the only tile that responds to a click —
+ * it starts unselected, so nothing is nominally chosen until the customer picks it, at which
+ * point the guide below reveals its instructions. Every other tile is a disabled preview of
+ * what's coming, never selectable.
  */
-export function PlatformGrid() {
+export function PlatformGrid({
+  selected,
+  onSelect,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+}) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {PLATFORMS.map((platform) => {
         const Icon = platform.icon;
 
+        if (!platform.available) {
+          return (
+            <div
+              key={platform.name}
+              aria-disabled="true"
+              className="flex cursor-not-allowed flex-col items-center gap-2 rounded-lg border border-border/70 p-4 text-center text-muted-foreground opacity-60"
+            >
+              <Icon className="size-6" aria-hidden />
+              <span className="text-sm font-medium text-foreground">{platform.name}</span>
+              <Badge variant="secondary">Coming soon</Badge>
+            </div>
+          );
+        }
+
         return (
-          <div
+          <button
             key={platform.name}
-            aria-current={platform.available ? "true" : undefined}
-            aria-disabled={!platform.available}
+            type="button"
+            aria-pressed={selected}
+            onClick={onSelect}
             className={cn(
-              "flex flex-col items-center gap-2 rounded-lg border p-4 text-center",
-              platform.available
+              "flex cursor-pointer flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors",
+              "outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              selected
                 ? "border-primary bg-primary/5 ring-1 ring-primary"
-                : "border-border/70 text-muted-foreground opacity-60",
+                : "border-border/70 hover:border-primary/50 hover:bg-muted/40",
             )}
           >
             <Icon className="size-6" aria-hidden />
             <span className="text-sm font-medium text-foreground">{platform.name}</span>
-            {platform.available ? (
-              <Badge>Selected</Badge>
-            ) : (
-              <Badge variant="secondary">Coming soon</Badge>
-            )}
-          </div>
+            {selected ? <Badge>Selected</Badge> : <Badge variant="outline">Available</Badge>}
+          </button>
         );
       })}
     </div>

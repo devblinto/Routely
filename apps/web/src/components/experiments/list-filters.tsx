@@ -82,7 +82,7 @@ export function ListFilters({
             onClick={() => selectStatus(tab.key)}
             aria-current={tab.key === status ? "page" : undefined}
             className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+              "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
               "outline-none focus-visible:ring-2 focus-visible:ring-ring",
               tab.key === status
                 ? "bg-background text-foreground shadow-sm"

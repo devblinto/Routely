@@ -17,6 +17,7 @@ export function Field({
   errors,
   children,
   className,
+  id: idOverride,
 }: {
   name: string;
   label: string;
@@ -30,8 +31,11 @@ export function Field({
     "aria-invalid": boolean | undefined;
   }) => ReactNode;
   className?: string;
+  /** Overrides the derived `field-${name}` id — needed when the same `name` repeats, as with a
+   * dynamic list of same-named inputs (e.g. several "variantUrl" rows). */
+  id?: string;
 }) {
-  const id = `field-${name}`;
+  const id = idOverride ?? `field-${name}`;
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = errors?.length ? `${id}-error` : undefined;
   const describedBy = [errorId, hintId].filter(Boolean).join(" ") || undefined;

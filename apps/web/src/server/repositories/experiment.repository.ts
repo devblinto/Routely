@@ -10,8 +10,16 @@ import { type DbClient, db } from "@/server/db";
  * scopes a query to the signed-in user without the experiment table needing a userId column.
  */
 
+const VARIANTS_INCLUDE = {
+  variants: { orderBy: { position: "asc" as const } },
+} satisfies Prisma.ExperimentInclude;
+
+export type ExperimentWithVariants = Prisma.ExperimentGetPayload<{
+  include: typeof VARIANTS_INCLUDE;
+}>;
+
 export type ExperimentWithWebsite = Prisma.ExperimentGetPayload<{
-  include: { website: true };
+  include: { website: true } & typeof VARIANTS_INCLUDE;
 }>;
 
 export function listExperimentsForWebsite(
@@ -32,7 +40,7 @@ export function findExperimentForUser(
 ): Promise<ExperimentWithWebsite | null> {
   return client.experiment.findFirst({
     where: { id: experimentId, website: { userId } },
-    include: { website: true },
+    include: { website: true, ...VARIANTS_INCLUDE },
   });
 }
 
@@ -43,10 +51,11 @@ export function findExperimentForUser(
 export function listActiveExperiments(
   websiteId: string,
   client: DbClient = db,
-): Promise<Experiment[]> {
+): Promise<ExperimentWithVariants[]> {
   return client.experiment.findMany({
     where: { websiteId, status: "ACTIVE" },
     orderBy: { createdAt: "asc" },
+    include: VARIANTS_INCLUDE,
   });
 }
 
@@ -70,14 +79,19 @@ export function listActiveExperimentsExcluding(
   });
 }
 
-/** Resolves an experiment during ingestion, confirming it belongs to the reporting website. */
+/**
+ * Resolves an experiment during ingestion, confirming it belongs to the reporting website.
+ * Includes variants so the caller can verify a claimed variant id actually belongs to this
+ * experiment before trusting it.
+ */
 export function findActiveExperimentForWebsite(
   experimentId: string,
   websiteId: string,
   client: DbClient = db,
-): Promise<Experiment | null> {
+): Promise<ExperimentWithVariants | null> {
   return client.experiment.findFirst({
     where: { id: experimentId, websiteId, status: "ACTIVE" },
+    include: VARIANTS_INCLUDE,
   });
 }
 
@@ -93,7 +107,7 @@ export function findExperimentByShareToken(
 ): Promise<ExperimentWithWebsite | null> {
   return client.experiment.findUnique({
     where: { shareToken },
-    include: { website: true },
+    include: { website: true, ...VARIANTS_INCLUDE },
   });
 }
 
@@ -122,7 +136,7 @@ export function listExperimentsForUser(
       ...(query.search ? { name: { contains: query.search, mode: "insensitive" as const } } : {}),
     },
     orderBy: { createdAt: "desc" },
-    include: { website: true },
+    include: { website: true, ...VARIANTS_INCLUDE },
   });
 }
 
@@ -166,6 +180,46 @@ export function updateExperiment(
     where: { id: experimentId, website: { userId } },
     data,
   });
+}
+
+/**
+ * Reconciles an experiment's variant rows with a submitted list: existing rows missing from
+ * `variants` are deleted, existing rows present are updated (url and position), and entries
+ * without an id are created.
+ *
+ * Deliberately does not open its own transaction — `DbClient` omits `$transaction` precisely so
+ * a caller (the service layer) composes this with the experiment's own field update atomically,
+ * rather than this repository function deciding transaction boundaries on its own.
+ */
+export async function replaceVariants(
+  experimentId: string,
+  variants: { id?: string; url: string; weight: number }[],
+  client: DbClient = db,
+): Promise<void> {
+  const existing = await client.experimentVariant.findMany({
+    where: { experimentId },
+    select: { id: true },
+  });
+  const submittedIds = new Set(variants.flatMap((variant) => (variant.id ? [variant.id] : [])));
+  const toDelete = existing.map((row) => row.id).filter((id) => !submittedIds.has(id));
+
+  if (toDelete.length > 0) {
+    await client.experimentVariant.deleteMany({ where: { id: { in: toDelete } } });
+  }
+
+  for (const [index, variant] of variants.entries()) {
+    const position = index + 1;
+    if (variant.id) {
+      await client.experimentVariant.update({
+        where: { id: variant.id },
+        data: { url: variant.url, weight: variant.weight, position },
+      });
+    } else {
+      await client.experimentVariant.create({
+        data: { experimentId, url: variant.url, weight: variant.weight, position },
+      });
+    }
+  }
 }
 
 export function deleteExperiment(

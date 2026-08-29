@@ -48,8 +48,15 @@ function isExperimentConfig(value: unknown): value is ExperimentConfig {
 
   return (
     typeof candidate.id === "string" &&
-    typeof candidate.variantUrl === "string" &&
-    typeof candidate.variantSplit === "number" &&
+    typeof candidate.controlWeight === "number" &&
+    Array.isArray(candidate.variants) &&
+    candidate.variants.length > 0 &&
+    candidate.variants.every(
+      (variant) =>
+        typeof variant.id === "string" &&
+        typeof variant.url === "string" &&
+        typeof variant.weight === "number",
+    ) &&
     typeof candidate.control?.url === "string" &&
     typeof candidate.goal?.url === "string"
   );

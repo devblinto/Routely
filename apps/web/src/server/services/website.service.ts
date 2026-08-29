@@ -24,13 +24,6 @@ export function listWebsites(actorUserId: string): Promise<Website[]> {
   return websiteRepo.listWebsitesForUser(actorUserId);
 }
 
-/** The dashboard list: the actor's websites, newest first, each with its experiment count. */
-export function listWebsitesWithCounts(
-  actorUserId: string,
-): Promise<websiteRepo.WebsiteWithCounts[]> {
-  return websiteRepo.listWebsitesWithCounts(actorUserId);
-}
-
 /** Number of experiments on a website the actor owns. Used by the delete confirmation. */
 export async function countExperiments(actorUserId: string, websiteId: string): Promise<number> {
   await getWebsite(actorUserId, websiteId);

@@ -7,11 +7,17 @@
 //     denormalised into a counter column that could drift from the rows it summarises.
 //
 //  2. Aggregation never needs a join. Rows that the dashboard groups by variant carry
-//     `variant` (and `websiteId` where useful) directly, so every dashboard query is served
+//     `variantId` (and `websiteId` where useful) directly, so every dashboard query is served
 //     by a covering index on the table it reads.
 //
 // Ownership always flows User → Website → Experiment → (Assignment | Event | Conversion),
 // and every cascade follows that same chain, so deleting a website removes its entire tree.
+//
+// An experiment has one control (`Experiment.controlUrl` — the page visitors already land on,
+// never redirected) and one or more variants (`ExperimentVariant` rows — redirect targets).
+// `variantId` on Assignment/Event/Conversion is nullable: NULL means control. Control isn't a
+// row in `ExperimentVariant` because it isn't a redirect target — giving it one would duplicate
+// `controlUrl` as a second source of truth for the same fact.
 
 generator client {
   provider = "prisma-client"
@@ -103,10 +109,11 @@ enum UrlMatchType {
   PREFIX
 }
 
-/// Which arm of an experiment a visitor was assigned to.
-enum Variant {
-  CONTROL
-  VARIANT
+/// Which measurement the results page highlights as "currently ahead" for an experiment.
+enum PrimaryMetric {
+  CONVERSION_RATE
+  TIME_ON_PAGE
+  PAGE_VIEWS
 }
 
 /// Event taxonomy. Values are the literal strings the SDK sends on the wire, so the
@@ -150,8 +157,8 @@ model Website {
 // Experiments
 // ---------------------------------------------------------------------------
 
-/// A redirect test: visitors on `controlUrl` are split between staying put and being sent
-/// to `variantUrl`; reaching `conversionUrl` counts as a conversion.
+/// A redirect test: visitors on `controlUrl` are split evenly across staying put and being
+/// sent to one of `variants`; reaching `conversionUrl` counts as a conversion.
 model Experiment {
   id          String  @id @default(cuid())
   websiteId   String
@@ -160,15 +167,28 @@ model Experiment {
 
   controlUrl       String
   controlMatchType UrlMatchType @default(EXACT)
-  variantUrl       String
 
   conversionUrl       String
   conversionMatchType UrlMatchType @default(EXACT)
 
-  /// Percentage of traffic routed to the variant, 0–100. The MVP UI fixes this at 50; the
-  /// column is an integer so uneven splits need no migration.
-  variantSplit Int              @default(50)
-  status       ExperimentStatus @default(DRAFT)
+  /// Control's share of the traffic entered into this experiment, relative to each variant's
+  /// `weight`. Weights are **relative**, normalised at draw time — so they carry no redundancy
+  /// with `trafficAllocation`, which independently decides how many visitors are entered at
+  /// all. A visitor's odds of landing on control are
+  /// `controlWeight / (controlWeight + sum(variant weights))`.
+  controlWeight Int @default(50)
+
+  status ExperimentStatus @default(DRAFT)
+
+  /// Percentage of visitors on the control page entered into this experiment at all, 1–100.
+  /// The remaining share see the control page untouched — never assigned, redirected or
+  /// tracked for this experiment. Independent of `variantSplit`, which only decides the arm
+  /// for visitors already included, so narrowing this cannot skew the comparison between arms.
+  trafficAllocation Int @default(100)
+
+  /// Which measurement the results page highlights as "currently ahead". Every metric is
+  /// always collected regardless of this choice — it only changes what is emphasised.
+  primaryMetric PrimaryMetric @default(CONVERSION_RATE)
 
   /// Unguessable token for the public, read-only results page. Null when sharing is off, so
   /// revoking a link is a matter of clearing it rather than maintaining a separate flag.
@@ -180,7 +200,8 @@ model Experiment {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  website     Website      @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  website     Website              @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  variants    ExperimentVariant[]
   assignments Assignment[]
   events      Event[]
   conversions Conversion[]
@@ -190,6 +211,29 @@ model Experiment {
   // Serves the website detail page: experiments newest-first.
   @@index([websiteId, createdAt])
   @@map("experiments")
+}
+
+/// One redirect target for an experiment. The control arm is deliberately not a row here — see
+/// the note at the top of this file.
+model ExperimentVariant {
+  id           String @id @default(cuid())
+  experimentId String
+  /// Display and redirect-draw order: 1, 2, 3… "Variant 1", "Variant 2" etc. are derived from
+  /// this rather than stored as a label, so reordering is one column, not a rename.
+  position     Int
+  url          String
+  /// This arm's share of the traffic entered into the experiment, relative to `controlWeight`
+  /// and the other variants' weights. See `Experiment.controlWeight`. `0` parks an arm without
+  /// deleting it — it keeps its collected results but stops receiving new visitors.
+  weight       Int    @default(50)
+
+  experiment  Experiment   @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
+  events      Event[]
+  conversions Conversion[]
+
+  @@index([experimentId, position])
+  @@map("experiment_variants")
 }
 
 // ---------------------------------------------------------------------------
@@ -225,20 +269,23 @@ model Assignment {
   id           String   @id @default(cuid())
   experimentId String
   visitorId    String
-  variant      Variant
+  /// NULL means the control arm. Non-null references the specific variant the visitor was
+  /// redirected to.
+  variantId    String?
   assignedAt   DateTime @default(now())
   createdAt    DateTime @default(now())
 
-  experiment  Experiment   @relation(fields: [experimentId], references: [id], onDelete: Cascade)
-  visitor     Visitor      @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  experiment  Experiment         @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  visitor     Visitor            @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  variant     ExperimentVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
   events      Event[]
   conversions Conversion[]
 
   /// Assignment consistency: a visitor can never hold two arms of the same experiment.
   /// Ingestion relies on this to make repeated assignment reports idempotent.
   @@unique([experimentId, visitorId])
-  /// Visitor counts and conversion rates group by variant on this index alone.
-  @@index([experimentId, variant])
+  /// Visitor counts and conversion rates group by arm on this index alone.
+  @@index([experimentId, variantId])
   @@index([experimentId, assignedAt])
   @@index([visitorId])
   @@map("assignments")
@@ -252,7 +299,8 @@ model Event {
   experimentId String
   visitorId    String
   assignmentId String
-  variant      Variant
+  /// NULL means the control arm; mirrors `Assignment.variantId` — see that field's comment.
+  variantId    String?
   type         EventType
   /// URL the event occurred on, normalised by the ingestion endpoint.
   url          String
@@ -262,13 +310,14 @@ model Event {
   occurredAt   DateTime
   createdAt    DateTime  @default(now())
 
-  website    Website    @relation(fields: [websiteId], references: [id], onDelete: Cascade)
-  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
-  visitor    Visitor    @relation(fields: [visitorId], references: [id], onDelete: Cascade)
-  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  website    Website            @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  experiment Experiment         @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  visitor    Visitor            @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  assignment Assignment         @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  variant    ExperimentVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
   /// The dashboard's main aggregation path: per-experiment metrics by arm over a date range.
-  @@index([experimentId, type, variant, occurredAt])
+  @@index([experimentId, type, variantId, occurredAt])
   /// Time-series charts for one experiment.
   @@index([experimentId, occurredAt])
   /// Website-wide activity and retention/pruning sweeps.
@@ -285,23 +334,25 @@ model Conversion {
   experimentId String
   visitorId    String
   assignmentId String
-  variant      Variant
+  /// NULL means the control arm; mirrors `Assignment.variantId` — see that field's comment.
+  variantId    String?
   /// URL that satisfied the goal.
   url          String
   occurredAt   DateTime
   createdAt    DateTime @default(now())
 
-  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
-  visitor    Visitor    @relation(fields: [visitorId], references: [id], onDelete: Cascade)
-  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  experiment Experiment         @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  visitor    Visitor            @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  assignment Assignment         @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  variant    ExperimentVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
   /// Conversion idempotency: one conversion per assignment. A visitor reloading the
   /// thank-you page, or a duplicate beacon, cannot inflate the conversion count. The MVP has
   /// a single goal per experiment, so assignment identity is the whole key; a multi-goal
   /// model would extend this to [assignmentId, goalId].
   @@unique([assignmentId])
-  /// Conversion counts group by variant on this index alone.
-  @@index([experimentId, variant])
+  /// Conversion counts group by arm on this index alone.
+  @@index([experimentId, variantId])
   @@index([experimentId, occurredAt])
   @@index([visitorId])
   @@map("conversions")

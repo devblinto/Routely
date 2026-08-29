@@ -8,11 +8,11 @@
 export const routes = {
   home: "/",
   login: "/login",
-  dashboard: "/dashboard",
   getStarted: "/get-started",
 
   websites: {
-    new: "/websites/new",
+    /** No standalone create page — a website is created from an `AddWebsiteDialog` popup
+     * wherever one is needed, not by navigating anywhere. */
     detail: (websiteId: string) => `/websites/${encodeURIComponent(websiteId)}`,
   },
 
@@ -20,6 +20,9 @@ export const routes = {
   share: (token: string) => `/share/${encodeURIComponent(token)}`,
 
   experiments: {
+    /** The experiments list — also where the app lands a signed-in visitor with no more
+     * specific destination, now that there is no separate dashboard route. */
+    list: "/experiments",
     new: (websiteId?: string) =>
       websiteId
         ? `/experiments/new?websiteId=${encodeURIComponent(websiteId)}`
@@ -29,12 +32,7 @@ export const routes = {
 } as const;
 
 /** Route prefixes that require an authenticated session. */
-export const PROTECTED_PREFIXES = [
-  "/dashboard",
-  "/get-started",
-  "/websites",
-  "/experiments",
-] as const;
+export const PROTECTED_PREFIXES = ["/get-started", "/websites", "/experiments"] as const;
 
 export function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some(

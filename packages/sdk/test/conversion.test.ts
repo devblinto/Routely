@@ -16,9 +16,10 @@ const GOAL = "https://acme.test/thank-you";
 const EXPERIMENT: ExperimentConfig = {
   id: "exp_1",
   control: { url: "https://acme.test/pricing", match: "EXACT" },
-  variantUrl: "https://acme.test/pricing-v2",
+  controlWeight: 50,
+  variants: [{ id: "var_1", url: "https://acme.test/pricing-v2", weight: 50 }],
   goal: { url: GOAL, match: "EXACT" },
-  variantSplit: 50,
+  trafficAllocation: 100,
 };
 
 describe("goal matching", () => {
@@ -32,7 +33,7 @@ describe("goal matching", () => {
 
   it("does not match the control or variant page", () => {
     expect(findGoalMatches(EXPERIMENT.control.url, [EXPERIMENT])).toHaveLength(0);
-    expect(findGoalMatches(EXPERIMENT.variantUrl, [EXPERIMENT])).toHaveLength(0);
+    expect(findGoalMatches(EXPERIMENT.variants[0]!.url, [EXPERIMENT])).toHaveLength(0);
   });
 
   it("does not match an unrelated page", () => {

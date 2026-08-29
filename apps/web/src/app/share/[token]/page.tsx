@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
 import { routes } from "@/lib/routes";
+import { armShares } from "@/lib/traffic";
 import * as analyticsService from "@/server/services/analytics.service";
 import * as experimentService from "@/server/services/experiment.service";
 
@@ -46,7 +47,24 @@ export default async function SharedResultsPage({
 
   // No actor: the token authorised this read, so the stats are fetched directly rather than
   // through the owner-scoped path.
-  const stats = await analyticsService.getSharedExperimentStats(experiment.id);
+  const variantIds = experiment.variants.map((variant) => variant.id);
+  const stats = await analyticsService.getSharedExperimentStats(experiment.id, variantIds);
+
+  const shares = armShares({
+    controlWeight: experiment.controlWeight,
+    variantWeights: experiment.variants.map((variant) => variant.weight),
+    trafficAllocation: experiment.trafficAllocation,
+  });
+
+  // `stats.variants` is built from `variantIds`, in that same order — zipping by index rather
+  // than searching keeps this a single pass, not one lookup per row.
+  const variantResults = experiment.variants.map((variant, index) => ({
+    variantId: variant.id,
+    url: variant.url,
+    label: `Variant ${index + 1}`,
+    share: shares.variants[index] ?? 0,
+    stats: stats.variants[index]!.stats,
+  }));
 
   return (
     <div className="min-h-screen bg-background">
@@ -82,10 +100,13 @@ export default async function SharedResultsPage({
               as a conversion for whichever version they saw.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-3">
+          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
               { label: "Control", url: experiment.controlUrl },
-              { label: "Variant", url: experiment.variantUrl },
+              ...experiment.variants.map((variant, index) => ({
+                label: `Variant ${index + 1}`,
+                url: variant.url,
+              })),
               { label: "Conversion goal", url: experiment.conversionUrl },
             ].map(({ label, url }) => (
               <div key={label} className="min-w-0 space-y-1">
@@ -99,10 +120,12 @@ export default async function SharedResultsPage({
         </Card>
 
         <ExperimentResults
-          stats={stats}
+          control={stats.control}
+          controlShare={shares.control}
+          variants={variantResults}
+          isEmpty={stats.isEmpty}
           controlUrl={experiment.controlUrl}
-          variantUrl={experiment.variantUrl}
-          variantSplit={experiment.variantSplit}
+          primaryMetric={experiment.primaryMetric}
           isDraft={experiment.status === "DRAFT"}
         />
 

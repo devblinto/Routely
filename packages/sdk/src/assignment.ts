@@ -1,4 +1,4 @@
-import type { ExperimentConfig, VariantKey } from "./contract";
+import type { ExperimentConfig, ExperimentVariantConfig } from "./contract";
 import { type KeyValueStore, createMemoryStore, getLocalStorage } from "./env";
 
 /**
@@ -7,7 +7,7 @@ import { type KeyValueStore, createMemoryStore, getLocalStorage } from "./env";
  * The assignment is made **once**, at random, and then persisted. Persistence — not the
  * randomness — is what makes the experience consistent: on every later page load the stored
  * value is read rather than a new draw being made, so a refresh, a return visit or a second
- * tab all see the same version. A visitor who saw the variant yesterday sees it today.
+ * tab all see the same version. A visitor who saw a variant yesterday sees it today.
  */
 
 const KEY_PREFIX = "routely_a_";
@@ -18,7 +18,8 @@ export function assignmentKey(experimentId: string): string {
 }
 
 export interface StoredAssignment {
-  variant: VariantKey;
+  /** `null` is control; a non-null value is the variant's id. */
+  variantId: string | null;
   /** Epoch milliseconds, for diagnostics — never used to expire an assignment. */
   at: number;
   /** True once the backend has acknowledged it, so a failed report can be retried. */
@@ -28,7 +29,7 @@ export interface StoredAssignment {
 function isStoredAssignment(value: unknown): value is StoredAssignment {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as Partial<StoredAssignment>;
-  return candidate.variant === "CONTROL" || candidate.variant === "VARIANT";
+  return candidate.variantId === null || typeof candidate.variantId === "string";
 }
 
 /**
@@ -81,19 +82,55 @@ export function writeAssignment(
 }
 
 /**
- * Draws an arm for a visitor who has none.
+ * Draws an arm for a visitor who has none, weighted by each arm's share.
  *
- * `variantSplit` is the percentage sent to the variant — 50 in the MVP, hence 50/50. The draw
- * is a plain uniform random: with the result persisted, a per-visitor hash would buy nothing
- * except an inability to change the split later without re-bucketing everyone.
+ * Weights are **relative**, not percentages: they are summed and the draw lands proportionally,
+ * so `50/50` and `1/1` mean the same thing and no caller has to make them add to 100. An arm
+ * weighted `0` is simply never drawn, which is what parking an arm means.
+ *
+ * The draw is a plain weighted random rather than a hash of the visitor id: with the result
+ * persisted, hashing would buy nothing except an inability to re-weight later without
+ * re-bucketing everyone who had already been assigned.
+ *
+ * A non-finite or negative weight is treated as `0`, and a set that sums to `0` falls back to
+ * control — a configuration that can't be drawn from must not throw inside a tracking script.
  */
-export function drawVariant(variantSplit: number, random: () => number = Math.random): VariantKey {
-  const split = Number.isFinite(variantSplit) ? Math.min(Math.max(variantSplit, 0), 100) : 50;
-  return random() * 100 < split ? "VARIANT" : "CONTROL";
+export function drawArm(
+  controlWeight: number,
+  variants: Pick<ExperimentVariantConfig, "id" | "weight">[],
+  random: () => number = Math.random,
+): string | null {
+  const clean = (weight: number) => (Number.isFinite(weight) && weight > 0 ? weight : 0);
+
+  const control = clean(controlWeight);
+  const weights = variants.map((variant) => clean(variant.weight));
+  const total = weights.reduce((sum, weight) => sum + weight, control);
+
+  if (total <= 0) return null;
+
+  // `random()` is [0, 1), so `roll` lands inside one of the ranges below. A source that
+  // returns exactly 1 — or a float rounding at the very top of the range — falls past the
+  // last range instead, so the tail below hands it to the last arm that can actually be
+  // drawn rather than wrapping it back to control.
+  let roll = random() * total;
+
+  if (roll < control) return null;
+  roll -= control;
+
+  for (const [index, weight] of weights.entries()) {
+    if (roll < weight) return variants[index]!.id;
+    roll -= weight;
+  }
+
+  for (let index = weights.length - 1; index >= 0; index -= 1) {
+    if (weights[index]! > 0) return variants[index]!.id;
+  }
+
+  return null;
 }
 
 export interface AssignmentResult {
-  variant: VariantKey;
+  variantId: string | null;
   /** True when this page load made the decision, rather than reading a stored one. */
   isNew: boolean;
 }
@@ -102,22 +139,28 @@ export interface AssignmentResult {
  * Returns the visitor's arm for an experiment, drawing and persisting one only if absent.
  *
  * `forced` carries a decision handed over in the URL after a redirect. It is applied only when
- * nothing is stored: a value from a query string is attacker-controllable, so it may seed a
- * new assignment on a fresh origin but must never overwrite one already made.
+ * nothing is stored: a value from a query string is attacker-controllable, so it may seed a new
+ * assignment on a fresh origin but must never overwrite one already made. Distinguished from
+ * "no forced value" by `undefined` rather than `null`, because `null` is itself a meaningful
+ * forced value now (forced to control) — unlike the old two-arm model, where "not forced" and
+ * "forced to control" could share one falsy sentinel.
  */
 export function resolveAssignment(
-  experiment: Pick<ExperimentConfig, "id" | "variantSplit">,
+  experiment: Pick<ExperimentConfig, "id" | "controlWeight" | "variants">,
   stores: KeyValueStore[],
-  options: { forced?: VariantKey | null; random?: () => number; now?: number } = {},
+  options: { forced?: string | null; random?: () => number; now?: number } = {},
 ): AssignmentResult {
   const existing = readAssignment(experiment.id, stores);
-  if (existing) return { variant: existing.variant, isNew: false };
+  if (existing) return { variantId: existing.variantId, isNew: false };
 
-  const variant = options.forced ?? drawVariant(experiment.variantSplit, options.random);
+  const variantId =
+    options.forced !== undefined
+      ? options.forced
+      : drawArm(experiment.controlWeight, experiment.variants, options.random);
 
-  writeAssignment(experiment.id, { variant, at: options.now ?? Date.now(), sent: false }, stores);
+  writeAssignment(experiment.id, { variantId, at: options.now ?? Date.now(), sent: false }, stores);
 
-  return { variant, isNew: true };
+  return { variantId, isNew: true };
 }
 
 /** Marks an assignment as acknowledged by the backend so it is not reported repeatedly. */

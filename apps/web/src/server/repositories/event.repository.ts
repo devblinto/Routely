@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { EventType, Prisma, Variant } from "@/generated/prisma/client";
+import type { EventType, Prisma } from "@/generated/prisma/client";
 import { type DbClient, db } from "@/server/db";
 
 /**
@@ -12,7 +12,8 @@ export interface EventRecordInput {
   experimentId: string;
   visitorId: string;
   assignmentId: string;
-  variant: Variant;
+  /** `null` is the control arm — see schema.prisma's header comment. */
+  variantId: string | null;
   type: EventType;
   url: string;
   durationMs?: number | null;
@@ -27,56 +28,19 @@ export function createEvents(
   return client.event.createMany({ data: events });
 }
 
-export interface EventTotals {
-  variant: Variant;
-  type: EventType;
-  count: number;
-  totalDurationMs: number;
-}
-
 /**
- * Event counts and accumulated duration per (variant, type) for one experiment.
+ * Page views per arm for one experiment, keyed by variant id (`null` is control).
  *
- * This is the dashboard's primary aggregation: one grouped scan of the
- * `[experimentId, type, variant, occurredAt]` index yields page views and total visible time
- * for both arms at once, rather than a query per metric per arm.
- */
-export async function aggregateEvents(
-  experimentId: string,
-  range?: { from: Date; to: Date },
-  client: DbClient = db,
-): Promise<EventTotals[]> {
-  const rows = await client.event.groupBy({
-    by: ["variant", "type"],
-    where: {
-      experimentId,
-      ...(range ? { occurredAt: { gte: range.from, lte: range.to } } : {}),
-    },
-    _count: { _all: true },
-    _sum: { durationMs: true },
-  });
-
-  return rows.map((row) => ({
-    variant: row.variant,
-    type: row.type,
-    count: row._count._all,
-    totalDurationMs: row._sum.durationMs ?? 0,
-  }));
-}
-
-/**
- * Page views per arm for one experiment.
- *
- * Served entirely by the `[experimentId, type, variant, occurredAt]` index, so it stays a
+ * Served entirely by the `[experimentId, type, variantId, occurredAt]` index, so it stays a
  * grouped count over the index rather than a scan of the events table.
  */
 export async function countPageViewsByVariant(
   experimentId: string,
   range?: { from: Date; to: Date },
   client: DbClient = db,
-): Promise<Record<Variant, number>> {
+): Promise<Map<string | null, number>> {
   const rows = await client.event.groupBy({
-    by: ["variant"],
+    by: ["variantId"],
     where: {
       experimentId,
       type: "page_view",
@@ -85,15 +49,11 @@ export async function countPageViewsByVariant(
     _count: { _all: true },
   });
 
-  const totals: Record<Variant, number> = { CONTROL: 0, VARIANT: 0 };
-  for (const row of rows) {
-    totals[row.variant] = row._count._all;
-  }
-  return totals;
+  return new Map(rows.map((row) => [row.variantId, row._count._all]));
 }
 
 /**
- * Distinct visitors who produced a page view, per arm.
+ * Distinct visitors who produced a page view, per arm (`null` is control).
  *
  * Deliberately distinct from the assignment count: an assignment means a visitor was bucketed,
  * while this means they actually loaded a page. The two differ when a visitor is assigned and
@@ -104,9 +64,9 @@ export async function countPageViewVisitorsByVariant(
   experimentId: string,
   range?: { from: Date; to: Date },
   client: DbClient = db,
-): Promise<Record<Variant, number>> {
+): Promise<Map<string | null, number>> {
   const rows = await client.event.groupBy({
-    by: ["variant", "visitorId"],
+    by: ["variantId", "visitorId"],
     where: {
       experimentId,
       type: "page_view",
@@ -114,15 +74,15 @@ export async function countPageViewVisitorsByVariant(
     },
   });
 
-  const totals: Record<Variant, number> = { CONTROL: 0, VARIANT: 0 };
+  const totals = new Map<string | null, number>();
   for (const row of rows) {
-    totals[row.variant] += 1;
+    totals.set(row.variantId, (totals.get(row.variantId) ?? 0) + 1);
   }
   return totals;
 }
 
 /**
- * Total reported visible time per arm, in milliseconds.
+ * Total reported visible time per arm, in milliseconds (`null` is control).
  *
  * Time is reported by the SDK as deltas — each event carries only what accumulated since the
  * previous one — so summing them gives total visible time with no risk of double counting a
@@ -132,9 +92,9 @@ export async function sumVisibleMsByVariant(
   experimentId: string,
   range?: { from: Date; to: Date },
   client: DbClient = db,
-): Promise<Record<Variant, number>> {
+): Promise<Map<string | null, number>> {
   const rows = await client.event.groupBy({
-    by: ["variant"],
+    by: ["variantId"],
     where: {
       experimentId,
       type: "time_on_page",
@@ -143,11 +103,7 @@ export async function sumVisibleMsByVariant(
     _sum: { durationMs: true },
   });
 
-  const totals: Record<Variant, number> = { CONTROL: 0, VARIANT: 0 };
-  for (const row of rows) {
-    totals[row.variant] = row._sum.durationMs ?? 0;
-  }
-  return totals;
+  return new Map(rows.map((row) => [row.variantId, row._sum.durationMs ?? 0]));
 }
 
 /** Most recent events for one experiment, for debugging an installation. */

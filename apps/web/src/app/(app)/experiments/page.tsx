@@ -132,7 +132,7 @@ export default async function ExperimentsPage({
                       <th className="text-right!">Visitors</th>
                       <th className="text-right!">Converted</th>
                       <th className="text-right!">Control</th>
-                      <th className="text-right!">Variant</th>
+                      <th className="text-right!">Best variant</th>
                       <th className="text-right!">Change</th>
                     </tr>
                   </thead>
@@ -167,7 +167,7 @@ export default async function ExperimentsPage({
                             {formatPercent(summary?.controlRate ?? null)}
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums">
-                            {formatPercent(summary?.variantRate ?? null)}
+                            {formatPercent(summary?.bestVariantRate ?? null)}
                           </td>
                           <td className="px-4 py-3 text-right">
                             <LiftBadge lift={summary?.lift ?? null} meaningful={enough} />
@@ -205,7 +205,7 @@ export default async function ExperimentsPage({
                             <span>{formatNumber(summary?.conversions ?? 0)} converted</span>
                             <span>
                               {formatPercent(summary?.controlRate ?? null)} →{" "}
-                              {formatPercent(summary?.variantRate ?? null)}
+                              {formatPercent(summary?.bestVariantRate ?? null)}
                             </span>
                             <LiftBadge lift={summary?.lift ?? null} meaningful={enough} />
                           </div>
@@ -219,9 +219,9 @@ export default async function ExperimentsPage({
           )}
 
           <p className="text-xs text-muted-foreground">
-            Change is the variant&rsquo;s conversion rate relative to the control&rsquo;s. It is
-            descriptive arithmetic, not a significance test, and is hidden until an experiment has
-            enough traffic for the comparison to mean anything.
+            Change is the best-performing variant&rsquo;s conversion rate relative to the
+            control&rsquo;s. It is descriptive arithmetic, not a significance test, and is hidden
+            until an experiment has enough traffic for the comparison to mean anything.
           </p>
         </div>
       )}

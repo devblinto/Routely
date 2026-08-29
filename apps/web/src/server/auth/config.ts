@@ -98,7 +98,7 @@ export const authConfig: NextAuthConfig = {
         // Fall through to the safe default.
       }
 
-      return `${baseUrl}${routes.dashboard}`;
+      return `${baseUrl}${routes.experiments.list}`;
     },
   },
 

@@ -87,9 +87,14 @@ export async function GET(request: NextRequest) {
     experiments: experiments.map((experiment): ExperimentConfig => ({
       id: experiment.id,
       control: { url: experiment.controlUrl, match: experiment.controlMatchType },
-      variantUrl: experiment.variantUrl,
+      controlWeight: experiment.controlWeight,
+      variants: experiment.variants.map((variant) => ({
+        id: variant.id,
+        url: variant.url,
+        weight: variant.weight,
+      })),
       goal: { url: experiment.conversionUrl, match: experiment.conversionMatchType },
-      variantSplit: experiment.variantSplit,
+      trafficAllocation: experiment.trafficAllocation,
     })),
   };
 

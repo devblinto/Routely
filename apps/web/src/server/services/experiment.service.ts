@@ -4,11 +4,13 @@ import { randomBytes } from "node:crypto";
 
 import type { Experiment, ExperimentStatus, Website } from "@/generated/prisma/client";
 import { controlUrlsConflict, isSameSite } from "@/lib/url";
+import { db } from "@/server/db";
 import { conflict, notFound, validationFailed } from "@/server/errors";
 import * as experimentRepo from "@/server/repositories/experiment.repository";
 import * as websiteRepo from "@/server/repositories/website.repository";
 import { parseOrThrow } from "@/server/validate";
 import {
+  type ExperimentVariantInput,
   changeExperimentStatusSchema,
   createExperimentSchema,
   updateExperimentSchema,
@@ -24,17 +26,6 @@ import {
  * cannot see: the same-site rule needs the website's domain, and the conflict rule needs the
  * website's other experiments.
  */
-
-/**
- * The MVP splits traffic evenly and offers no control over it.
- *
- * The column is an integer so uneven splits need no migration later; pinning the value here
- * rather than trusting the request means a crafted submission cannot skew a running test.
- */
-export const MVP_VARIANT_SPLIT = 50;
-
-/** The fields the same-site rule applies to. */
-const URL_FIELDS = ["controlUrl", "variantUrl", "conversionUrl"] as const;
 
 /**
  * Permitted status transitions.
@@ -88,22 +79,25 @@ export async function getExperiment(
  *
  * The conversion URL is held to the same rule: conversions are attributed by the snippet
  * running on the goal page, and that snippet belongs to this website. A goal on a different
- * domain could never record anything, so accepting it would only produce a silent dud.
+ * domain could never record anything, so accepting it would only produce a silent dud. Every
+ * variant's redirect target is held to it for the same reason as the control URL.
  */
 function assertSameSite(
   website: Pick<Website, "domain">,
-  urls: { controlUrl: string; variantUrl: string; conversionUrl: string },
+  urls: { controlUrl: string; variants: ExperimentVariantInput[]; conversionUrl: string },
 ): void {
   const offenders: Record<string, string[]> = {};
+  const onSite = (url: string) => isSameSite(url, website.domain);
+  const message = `Must be a URL on ${website.domain} or one of its subdomains.`;
 
-  // Iterate an explicit field list, not `Object.entries(urls)`: callers pass the whole parsed
-  // experiment, and TypeScript does not apply excess-property checks to a non-literal, so
-  // entry iteration would silently validate `name` and `variantSplit` as if they were URLs.
-  for (const field of URL_FIELDS) {
-    if (!isSameSite(urls[field], website.domain)) {
-      offenders[field] = [`Must be a URL on ${website.domain} or one of its subdomains.`];
+  if (!onSite(urls.controlUrl)) offenders["controlUrl"] = [message];
+  if (!onSite(urls.conversionUrl)) offenders["conversionUrl"] = [message];
+
+  urls.variants.forEach((variant, index) => {
+    if (!onSite(variant.url)) {
+      offenders[`variants.${index}.url`] = [message];
     }
-  }
+  });
 
   if (Object.keys(offenders).length > 0) {
     throw validationFailed(
@@ -165,12 +159,20 @@ export async function createExperiment(actorUserId: string, input: unknown): Pro
     description: data.description ?? null,
     controlUrl: data.controlUrl,
     controlMatchType: data.controlMatchType,
-    variantUrl: data.variantUrl,
     conversionUrl: data.conversionUrl,
     conversionMatchType: data.conversionMatchType,
-    variantSplit: MVP_VARIANT_SPLIT,
+    primaryMetric: data.primaryMetric,
+    trafficAllocation: data.trafficAllocation,
+    controlWeight: data.controlWeight,
     // Experiments always begin as drafts: nothing is redirected until someone activates it.
     status: "DRAFT",
+    variants: {
+      create: data.variants.map((variant, index) => ({
+        url: variant.url,
+        weight: variant.weight,
+        position: index + 1,
+      })),
+    },
   });
 }
 
@@ -181,7 +183,14 @@ export async function createExperiment(actorUserId: string, input: unknown): Pro
  * complete configuration, so the stored record is merged with the changes before validation.
  * Editing the targets of a running experiment is rejected: existing visitors are already
  * bucketed against the old configuration, and mixing both under one experiment id would
- * silently corrupt the comparison.
+ * silently corrupt the comparison. That lock covers the whole variant set, not just each
+ * URL's text — adding or removing an arm after visitors are already bucketed against the old
+ * set would be the same corruption by another route.
+ *
+ * **Traffic weights are deliberately outside that lock.** Re-weighting only changes the odds
+ * for visitors who have not been bucketed yet; every existing assignment is permanent, so no
+ * already-collected result changes meaning. Being able to shift traffic — or park an arm at 0
+ * — while a test runs is the point of having weights at all.
  */
 export async function updateExperiment(
   actorUserId: string,
@@ -198,21 +207,40 @@ export async function updateExperiment(
       description: existing.description ?? undefined,
       controlUrl: existing.controlUrl,
       controlMatchType: existing.controlMatchType,
-      variantUrl: existing.variantUrl,
+      controlWeight: existing.controlWeight,
+      variants: existing.variants.map((variant) => ({
+        id: variant.id,
+        url: variant.url,
+        weight: variant.weight,
+      })),
       conversionUrl: existing.conversionUrl,
       conversionMatchType: existing.conversionMatchType,
-      variantSplit: existing.variantSplit,
+      primaryMetric: existing.primaryMetric,
+      trafficAllocation: existing.trafficAllocation,
       ...changes,
     },
     "Check the experiment setup.",
   );
 
+  // Structure — which arms exist and where they point — is what the running-experiment lock
+  // guards. Weight is compared separately below, because it is allowed to change at any time.
+  const variantsStructurallyChanged =
+    merged.variants.length !== existing.variants.length ||
+    merged.variants.some(
+      (variant, index) =>
+        variant.id !== existing.variants[index]?.id || variant.url !== existing.variants[index]?.url,
+    );
+
+  const variantsChanged =
+    variantsStructurallyChanged ||
+    merged.variants.some((variant, index) => variant.weight !== existing.variants[index]?.weight);
+
   const targetsChanged =
     merged.controlUrl !== existing.controlUrl ||
-    merged.variantUrl !== existing.variantUrl ||
     merged.conversionUrl !== existing.conversionUrl ||
     merged.controlMatchType !== existing.controlMatchType ||
-    merged.conversionMatchType !== existing.conversionMatchType;
+    merged.conversionMatchType !== existing.conversionMatchType ||
+    variantsStructurallyChanged;
 
   if (targetsChanged && existing.status !== "DRAFT") {
     throw validationFailed(
@@ -230,15 +258,24 @@ export async function updateExperiment(
     );
   }
 
-  const { experimentId: _id, variantSplit: _split, ...data } = merged;
-  const result = await experimentRepo.updateExperiment(experimentId, actorUserId, {
-    ...data,
-    description: data.description ?? null,
-  });
+  const { experimentId: _id, variants, ...data } = merged;
 
-  if (result.count === 0) {
-    throw notFound("That experiment does not exist.");
-  }
+  await db.$transaction(async (tx) => {
+    const result = await experimentRepo.updateExperiment(
+      experimentId,
+      actorUserId,
+      { ...data, description: data.description ?? null },
+      tx,
+    );
+
+    if (result.count === 0) {
+      throw notFound("That experiment does not exist.");
+    }
+
+    if (variantsChanged) {
+      await experimentRepo.replaceVariants(experimentId, variants, tx);
+    }
+  });
 
   return getExperiment(actorUserId, experimentId);
 }

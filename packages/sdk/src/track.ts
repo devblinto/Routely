@@ -81,7 +81,7 @@ export function sendPageEvents(
   apiBase: string,
   siteId: string,
   visitorId: string,
-  context: { experimentId: string; variant: TrackedEvent["variant"]; url: string },
+  context: { experimentId: string; variantId: TrackedEvent["variantId"]; url: string },
   options: { includeAssignment: boolean; includePageView: boolean },
   now: number = Date.now(),
 ): boolean {
@@ -90,7 +90,7 @@ export function sendPageEvents(
   if (options.includeAssignment) {
     events.push({
       experimentId: context.experimentId,
-      variant: context.variant,
+      variantId: context.variantId,
       type: "assignment",
       url: context.url,
       ts: now,
@@ -100,7 +100,7 @@ export function sendPageEvents(
   if (options.includePageView) {
     events.push({
       experimentId: context.experimentId,
-      variant: context.variant,
+      variantId: context.variantId,
       type: "page_view",
       url: context.url,
       ts: now,
@@ -121,7 +121,7 @@ export function sendTimeOnPage(
   apiBase: string,
   siteId: string,
   visitorId: string,
-  context: { experimentId: string; variant: TrackedEvent["variant"]; url: string },
+  context: { experimentId: string; variantId: TrackedEvent["variantId"]; url: string },
   durationMs: number,
   now: number = Date.now(),
 ): boolean {
@@ -130,7 +130,7 @@ export function sendTimeOnPage(
   return sendEvents(apiBase, siteId, visitorId, [
     {
       experimentId: context.experimentId,
-      variant: context.variant,
+      variantId: context.variantId,
       type: "time_on_page",
       url: context.url,
       durationMs: Math.round(durationMs),
@@ -150,13 +150,13 @@ export function sendConversion(
   apiBase: string,
   siteId: string,
   visitorId: string,
-  context: { experimentId: string; variant: TrackedEvent["variant"]; url: string },
+  context: { experimentId: string; variantId: TrackedEvent["variantId"]; url: string },
   now: number = Date.now(),
 ): boolean {
   return sendEvents(apiBase, siteId, visitorId, [
     {
       experimentId: context.experimentId,
-      variant: context.variant,
+      variantId: context.variantId,
       type: "conversion",
       url: context.url,
       ts: now,

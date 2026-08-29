@@ -58,11 +58,13 @@ async function main() {
       websiteId: website.id,
       name: "Verify experiment",
       controlUrl: "https://verify.test/a",
-      variantUrl: "https://verify.test/b",
       conversionUrl: "https://verify.test/done",
       status: "ACTIVE",
+      variants: { create: [{ position: 1, url: "https://verify.test/b" }] },
     },
+    include: { variants: true },
   });
+  const variant = experiment.variants[0]!;
 
   console.log("\nTenant isolation");
   {
@@ -105,18 +107,18 @@ async function main() {
   console.log("\nAssignment consistency");
   const assignment = await db.assignment.upsert({
     where: { experimentId_visitorId: { experimentId: experiment.id, visitorId: visitor.id } },
-    create: { experimentId: experiment.id, visitorId: visitor.id, variant: "CONTROL" },
+    create: { experimentId: experiment.id, visitorId: visitor.id, variantId: null },
     update: {},
   });
   {
     // A client reporting the opposite arm must not be able to flip a stored assignment.
     const reasserted = await db.assignment.upsert({
       where: { experimentId_visitorId: { experimentId: experiment.id, visitorId: visitor.id } },
-      create: { experimentId: experiment.id, visitorId: visitor.id, variant: "VARIANT" },
+      create: { experimentId: experiment.id, visitorId: visitor.id, variantId: variant.id },
       update: {},
     });
     check("assignment is stable across repeated reports", reasserted.id === assignment.id);
-    check("the stored variant wins over a conflicting report", reasserted.variant === "CONTROL");
+    check("the stored arm wins over a conflicting report", reasserted.variantId === null);
 
     const total = await db.assignment.count({
       where: { experimentId: experiment.id, visitorId: visitor.id },
@@ -132,7 +134,7 @@ async function main() {
           experimentId: experiment.id,
           visitorId: visitor.id,
           assignmentId: assignment.id,
-          variant: "CONTROL",
+          variantId: null,
           url: "https://verify.test/done",
           occurredAt: new Date(),
         },
@@ -145,7 +147,7 @@ async function main() {
           experimentId: experiment.id,
           visitorId: visitor.id,
           assignmentId: assignment.id,
-          variant: "CONTROL",
+          variantId: null,
           url: "https://verify.test/done",
           occurredAt: new Date(),
         },
@@ -168,7 +170,7 @@ async function main() {
           experimentId: experiment.id,
           visitorId: visitor.id,
           assignmentId: assignment.id,
-          variant: "CONTROL",
+          variantId: null,
           type: "page_view",
           url: "https://verify.test/a",
           occurredAt: new Date(),
@@ -178,7 +180,7 @@ async function main() {
           experimentId: experiment.id,
           visitorId: visitor.id,
           assignmentId: assignment.id,
-          variant: "CONTROL",
+          variantId: null,
           type: "time_on_page",
           url: "https://verify.test/a",
           durationMs: 12_000,
@@ -188,7 +190,7 @@ async function main() {
     });
 
     const grouped = await db.event.groupBy({
-      by: ["variant", "type"],
+      by: ["variantId", "type"],
       where: { experimentId: experiment.id },
       _count: { _all: true },
       _sum: { durationMs: true },
@@ -197,22 +199,22 @@ async function main() {
     const pageViews = grouped.find((r) => r.type === "page_view")?._count._all ?? 0;
     const visibleMs = grouped.find((r) => r.type === "time_on_page")?._sum.durationMs ?? 0;
 
-    check("page views group by variant and type", pageViews === 1, `got ${pageViews}`);
+    check("page views group by arm and type", pageViews === 1, `got ${pageViews}`);
     check("visible time sums per arm", visibleMs === 12_000, `got ${visibleMs}`);
 
     const assignments = await db.assignment.groupBy({
-      by: ["variant"],
+      by: ["variantId"],
       where: { experimentId: experiment.id },
       _count: { _all: true },
     });
     const conversions = await db.conversion.groupBy({
-      by: ["variant"],
+      by: ["variantId"],
       where: { experimentId: experiment.id },
       _count: { _all: true },
     });
 
-    const visitors = assignments.find((r) => r.variant === "CONTROL")?._count._all ?? 0;
-    const converted = conversions.find((r) => r.variant === "CONTROL")?._count._all ?? 0;
+    const visitors = assignments.find((r) => r.variantId === null)?._count._all ?? 0;
+    const converted = conversions.find((r) => r.variantId === null)?._count._all ?? 0;
     check(
       "conversion rate is computable from two grouped counts",
       visitors === 1 && converted === 1,

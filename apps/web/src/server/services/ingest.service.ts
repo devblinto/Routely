@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { EventType, Variant } from "@/generated/prisma/client";
+import type { EventType } from "@/generated/prisma/client";
 import { normalizeUrl, urlMatches } from "@/lib/url";
 import { db } from "@/server/db";
 import * as assignmentRepo from "@/server/repositories/assignment.repository";
@@ -22,6 +22,10 @@ import { clampClientTimestamp, eventBatchSchema } from "@/validation/tracking";
  *    on someone else's site is discarded, not stored.
  *  - Only **ACTIVE** experiments accept events, so a paused experiment stops recording
  *    immediately even from a browser still holding a cached configuration.
+ *  - A claimed **variant id** must actually belong to the experiment it's reported against — a
+ *    variant id is a real foreign key now, so unlike the old `"CONTROL" | "VARIANT"` literal, a
+ *    forged or stale one could otherwise reference a variant of a *different* experiment and
+ *    still satisfy the database's foreign-key constraint while being semantically wrong.
  *  - The **assignment** is read from the database, and the stored arm wins over whatever the
  *    client claims. A cleared cache or a tampered payload cannot move a visitor.
  *  - **URLs are normalised server-side.** The SDK normalises too, but a value that arrives
@@ -36,10 +40,10 @@ import { clampClientTimestamp, eventBatchSchema } from "@/validation/tracking";
  * How close together two identical page views must be to count as one.
  *
  * Repeated SDK initialisation — two copies of the snippet, a tag manager injecting it again,
- * a framework remounting — produces a burst within milliseconds. A person genuinely reloading
- * the same page inside five seconds is rare enough that under-counting them is the better
- * error: a duplicate inflates one arm and biases the comparison, while a missed reload is
- * noise that affects both arms equally.
+ * a framework that re-executes scripts on hydration — produces a burst within milliseconds. A
+ * person genuinely reloading the same page inside five seconds is rare enough that
+ * under-counting them is the better error: a duplicate inflates one arm and biases the
+ * comparison, while a missed reload is noise that affects both arms equally.
  */
 const PAGE_VIEW_DEDUPE_WINDOW_MS = 5_000;
 
@@ -99,6 +103,18 @@ export async function ingest(payload: unknown): Promise<IngestResult> {
       continue;
     }
 
+    // A non-null claim must reference one of *this* experiment's own variants. Without this, a
+    // crafted payload could name a variant belonging to a completely different experiment —
+    // the foreign-key constraint alone would accept it, since it only checks that the id
+    // exists somewhere, not that it exists *here*.
+    if (
+      event.variantId !== null &&
+      !experiment.variants.some((variant) => variant.id === event.variantId)
+    ) {
+      result.rejected += 1;
+      continue;
+    }
+
     const occurredAt = clampClientTimestamp(event.ts, now);
 
     // A conversion must be on the page the experiment actually counts as its goal. Without
@@ -132,7 +148,7 @@ export async function ingest(payload: unknown): Promise<IngestResult> {
         : await assignmentRepo.ensureAssignment(
             experiment.id,
             visitorId,
-            event.variant as Variant,
+            event.variantId,
             occurredAt,
           );
 
@@ -159,7 +175,7 @@ export async function ingest(payload: unknown): Promise<IngestResult> {
       visitorId,
       assignmentId: assignment.id,
       // The stored arm, not the reported one.
-      variant: assignment.variant,
+      variantId: assignment.variantId,
       type: event.type as EventType,
       url,
       durationMs: event.durationMs ?? null,
@@ -211,7 +227,7 @@ async function recordEvent(input: {
   experimentId: string;
   visitorId: string;
   assignmentId: string;
-  variant: Variant;
+  variantId: string | null;
   type: EventType;
   url: string;
   durationMs: number | null;
@@ -224,7 +240,7 @@ async function recordEvent(input: {
       experimentId: input.experimentId,
       visitorId: input.visitorId,
       assignmentId: input.assignmentId,
-      variant: input.variant,
+      variantId: input.variantId,
       url: input.url,
       occurredAt: input.occurredAt,
     });

@@ -1,6 +1,5 @@
 import "server-only";
 
-import type { Variant } from "@/generated/prisma/client";
 import { db } from "@/server/db";
 import { notFound } from "@/server/errors";
 import * as assignmentRepo from "@/server/repositories/assignment.repository";
@@ -26,7 +25,7 @@ import type { DateRange } from "@/validation/common";
  * beacon is lost entirely, so a crash or a force-quit truncates the measurement silently, and
  * that truncation is more likely on slower devices.
  *
- * It is meaningful **as a comparison between the two arms of one experiment**, because both
+ * It is meaningful **as a comparison between the arms of one experiment**, because all of them
  * are measured the same way and the bias is shared. It is not a session-duration figure, and
  * presenting it as one — or comparing it against a number from another tool — would be wrong.
  * The UI must label it as approximate wherever it appears.
@@ -63,27 +62,21 @@ export interface ArmStats {
   conversionRate: number | null;
 }
 
+export interface ExperimentVariantStats {
+  variantId: string;
+  stats: ArmStats;
+  /**
+   * Relative change in conversion rate versus control, as a fraction: `0.42` means this
+   * variant converts 42% better. Null when it cannot be computed (control has no conversions
+   * to improve on, or either side has no rate yet).
+   */
+  lift: number | null;
+}
+
 export interface ExperimentStats {
   experimentId: string;
   control: ArmStats;
-  variant: ArmStats;
-  /**
-   * Relative change in conversion rate, variant against control, as a fraction: `0.42` means
-   * the variant converts 42% better. Null when it cannot be computed.
-   *
-   * **Relative, not absolute** — the difference between 5% and 7% is 2 percentage points but a
-   * 40% improvement, and the two are read very differently. It is labelled accordingly
-   * wherever it is shown.
-   *
-   * Null when the control rate is zero: dividing by it would produce Infinity, and "infinitely
-   * better" is not a claim any amount of data supports. It is also null before either arm has
-   * a rate at all.
-   *
-   * This is arithmetic on two observed rates, **not** a significance test. A lift computed
-   * from a handful of conversions is mostly noise, which is why the UI hides it below a
-   * minimum sample.
-   */
-  lift: number | null;
+  variants: ExperimentVariantStats[];
   /**
    * True when nothing at all has been recorded — drives the dashboard's empty state.
    *
@@ -95,18 +88,18 @@ export interface ExperimentStats {
 }
 
 function armStats(
-  variant: Variant,
-  assigned: Record<Variant, number>,
-  visitors: Record<Variant, number>,
-  views: Record<Variant, number>,
-  visibleMs: Record<Variant, number>,
-  conversions: Record<Variant, number>,
+  variantId: string | null,
+  assigned: Map<string | null, number>,
+  visitors: Map<string | null, number>,
+  views: Map<string | null, number>,
+  visibleMs: Map<string | null, number>,
+  conversions: Map<string | null, number>,
 ): ArmStats {
-  const pageViews = views[variant];
-  const uniqueVisitors = visitors[variant];
-  const totalVisibleMs = visibleMs[variant];
-  const assignedVisitors = assigned[variant];
-  const converted = conversions[variant];
+  const pageViews = views.get(variantId) ?? 0;
+  const uniqueVisitors = visitors.get(variantId) ?? 0;
+  const totalVisibleMs = visibleMs.get(variantId) ?? 0;
+  const assignedVisitors = assigned.get(variantId) ?? 0;
+  const converted = conversions.get(variantId) ?? 0;
 
   return {
     assignedVisitors,
@@ -123,9 +116,9 @@ function armStats(
 }
 
 /**
- * Page view and visitor counts for both arms.
+ * Page view and visitor counts for every arm.
  *
- * The three underlying queries are independent, so they are issued together: the dashboard
+ * The five underlying queries are independent, so they are issued together: the dashboard
  * waits for the slowest rather than the sum.
  */
 export async function getExperimentStats(
@@ -138,56 +131,71 @@ export async function getExperimentStats(
     throw notFound("That experiment does not exist.");
   }
 
-  return computeStats(experiment.id, range);
+  return computeStats(
+    experiment.id,
+    experiment.variants.map((variant) => variant.id),
+    range,
+  );
 }
 
 /**
  * Stats for an experiment reached through a public share token.
  *
  * Takes no actor because the token *is* the authorisation, and the caller has already resolved
- * it. Kept as a separate, explicitly-named entry point rather than making `actorUserId`
- * optional: an optional owner check is one forgotten argument away from an unauthorised read,
- * whereas a differently-named function has to be chosen deliberately.
+ * it (and its variant list, which is passed in rather than re-fetched here). Kept as a
+ * separate, explicitly-named entry point rather than making `actorUserId` optional: an optional
+ * owner check is one forgotten argument away from an unauthorised read, whereas a
+ * differently-named function has to be chosen deliberately.
  */
 export function getSharedExperimentStats(
   experimentId: string,
+  variantIds: string[],
   range?: DateRange,
 ): Promise<ExperimentStats> {
-  return computeStats(experimentId, range);
+  return computeStats(experimentId, variantIds, range);
 }
 
-async function computeStats(experimentId: string, range?: DateRange): Promise<ExperimentStats> {
-  const experiment = { id: experimentId };
-
+async function computeStats(
+  experimentId: string,
+  variantIds: string[],
+  range?: DateRange,
+): Promise<ExperimentStats> {
   const [assigned, visitors, views, visibleMs, conversions] = await Promise.all([
-    assignmentRepo.countAssignmentsByVariant(experiment.id, range),
-    eventRepo.countPageViewVisitorsByVariant(experiment.id, range),
-    eventRepo.countPageViewsByVariant(experiment.id, range),
-    eventRepo.sumVisibleMsByVariant(experiment.id, range),
-    conversionRepo.countConversionsByVariant(experiment.id, range),
+    assignmentRepo.countAssignmentsByVariant(experimentId, range),
+    eventRepo.countPageViewVisitorsByVariant(experimentId, range),
+    eventRepo.countPageViewsByVariant(experimentId, range),
+    eventRepo.sumVisibleMsByVariant(experimentId, range),
+    conversionRepo.countConversionsByVariant(experimentId, range),
   ]);
 
-  const control = armStats("CONTROL", assigned, visitors, views, visibleMs, conversions);
-  const variant = armStats("VARIANT", assigned, visitors, views, visibleMs, conversions);
+  const armStatsFor = (variantId: string | null) =>
+    armStats(variantId, assigned, visitors, views, visibleMs, conversions);
+
+  const control = armStatsFor(null);
+  const variants = variantIds.map((variantId) => {
+    const stats = armStatsFor(variantId);
+    return { variantId, stats, lift: relativeLift(control.conversionRate, stats.conversionRate) };
+  });
 
   const recorded =
     control.assignedVisitors +
-    variant.assignedVisitors +
     control.pageViews +
-    variant.pageViews +
     control.conversions +
-    variant.conversions;
+    variants.reduce(
+      (sum, variant) =>
+        sum + variant.stats.assignedVisitors + variant.stats.pageViews + variant.stats.conversions,
+      0,
+    );
 
   return {
-    experimentId: experiment.id,
+    experimentId,
     control,
-    variant,
-    lift: relativeLift(control.conversionRate, variant.conversionRate),
+    variants,
     isEmpty: recorded === 0,
   };
 }
 
-/** Variant against control, as a fraction. Null wherever the division is not meaningful. */
+/** A variant's rate against control's, as a fraction. Null wherever the division is not meaningful. */
 export function relativeLift(
   controlRate: number | null,
   variantRate: number | null,
@@ -202,19 +210,22 @@ export function relativeLift(
 /**
  * Stats for many experiments at once, for the experiments list.
  *
- * Three grouped queries in total, regardless of how many experiments are listed — the
+ * Two grouped queries in total, regardless of how many experiments are listed — the
  * alternative, calling `getExperimentStats` per row, is a query per experiment per metric and
  * degrades as a customer accumulates tests.
  *
- * Only the metrics the list actually shows are computed: visitors, conversions and lift. Page
- * views and visible time are left to the detail page rather than fetched and discarded.
+ * Only the metrics the list actually shows are computed: visitors, conversions and a lift.
+ * Page views and visible time are left to the detail page rather than fetched and discarded.
  */
 export interface ExperimentSummary {
   experimentId: string;
   assignedVisitors: number;
   conversions: number;
   controlRate: number | null;
-  variantRate: number | null;
+  /** The best-performing variant's conversion rate — with more than one variant, this is not
+   * literally "the" variant, so it's labelled as the best one wherever it's rendered. */
+  bestVariantRate: number | null;
+  /** Relative change of the best-performing variant over control. */
   lift: number | null;
 }
 
@@ -232,7 +243,7 @@ export async function getExperimentSummaries(
 
   const [assignments, conversions] = await Promise.all([
     db.assignment.groupBy({
-      by: ["experimentId", "variant"],
+      by: ["experimentId", "variantId"],
       where: {
         experimentId: { in: experimentIds },
         experiment: owned,
@@ -243,7 +254,7 @@ export async function getExperimentSummaries(
       _count: { _all: true },
     }),
     db.conversion.groupBy({
-      by: ["experimentId", "variant"],
+      by: ["experimentId", "variantId"],
       where: {
         experimentId: { in: experimentIds },
         experiment: owned,
@@ -253,37 +264,48 @@ export async function getExperimentSummaries(
     }),
   ]);
 
-  const assigned = new Map<string, Record<Variant, number>>();
-  const converted = new Map<string, Record<Variant, number>>();
-
-  const blank = (): Record<Variant, number> => ({ CONTROL: 0, VARIANT: 0 });
+  const assignedByExperiment = new Map<string, Map<string | null, number>>();
+  const convertedByExperiment = new Map<string, Map<string | null, number>>();
 
   for (const row of assignments) {
-    const entry = assigned.get(row.experimentId) ?? blank();
-    entry[row.variant] = row._count._all;
-    assigned.set(row.experimentId, entry);
+    const inner = assignedByExperiment.get(row.experimentId) ?? new Map<string | null, number>();
+    inner.set(row.variantId, row._count._all);
+    assignedByExperiment.set(row.experimentId, inner);
   }
 
   for (const row of conversions) {
-    const entry = converted.get(row.experimentId) ?? blank();
-    entry[row.variant] = row._count._all;
-    converted.set(row.experimentId, entry);
+    const inner = convertedByExperiment.get(row.experimentId) ?? new Map<string | null, number>();
+    inner.set(row.variantId, row._count._all);
+    convertedByExperiment.set(row.experimentId, inner);
   }
 
   for (const experimentId of experimentIds) {
-    const a = assigned.get(experimentId) ?? blank();
-    const c = converted.get(experimentId) ?? blank();
+    const assigned = assignedByExperiment.get(experimentId) ?? new Map<string | null, number>();
+    const converted = convertedByExperiment.get(experimentId) ?? new Map<string | null, number>();
 
-    const controlRate = a.CONTROL > 0 ? c.CONTROL / a.CONTROL : null;
-    const variantRate = a.VARIANT > 0 ? c.VARIANT / a.VARIANT : null;
+    const controlAssigned = assigned.get(null) ?? 0;
+    const controlConverted = converted.get(null) ?? 0;
+    const controlRate = controlAssigned > 0 ? controlConverted / controlAssigned : null;
+
+    let bestVariantRate: number | null = null;
+    for (const [variantId, variantAssigned] of assigned) {
+      if (variantId === null || variantAssigned === 0) continue;
+      const variantRate = (converted.get(variantId) ?? 0) / variantAssigned;
+      if (bestVariantRate === null || variantRate > bestVariantRate) {
+        bestVariantRate = variantRate;
+      }
+    }
+
+    const totalAssigned = [...assigned.values()].reduce((sum, count) => sum + count, 0);
+    const totalConverted = [...converted.values()].reduce((sum, count) => sum + count, 0);
 
     summaries.set(experimentId, {
       experimentId,
-      assignedVisitors: a.CONTROL + a.VARIANT,
-      conversions: c.CONTROL + c.VARIANT,
+      assignedVisitors: totalAssigned,
+      conversions: totalConverted,
       controlRate,
-      variantRate,
-      lift: relativeLift(controlRate, variantRate),
+      bestVariantRate,
+      lift: relativeLift(controlRate, bestVariantRate),
     });
   }
 

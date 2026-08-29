@@ -2,10 +2,14 @@
 
 import { useActionState, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Target } from "lucide-react";
+import { Plus, Target, X } from "lucide-react";
 
 import { Field } from "@/components/common/field";
 import { SubmitButton } from "@/components/common/submit-button";
+import {
+  TrafficDistribution,
+  type DistributionArm,
+} from "@/components/experiments/traffic-distribution";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,27 +22,31 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import type { PrimaryMetric, UrlMatchType } from "@/generated/prisma/enums";
 import { IDLE, type FormState } from "@/lib/form-state";
+import { armShares } from "@/lib/traffic";
 
-export interface WebsiteOption {
-  id: string;
-  name: string;
-  domain: string;
+interface VariantDefault {
+  id?: string;
+  url: string;
+  /** Relative share of the included traffic. See `Experiment.controlWeight` in the schema. */
+  weight: number;
 }
 
 /**
- * Create/edit form for a redirect experiment.
+ * Edit form for an existing redirect experiment.
  *
- * One component serves both cases: the caller supplies the action, the existing values, and
- * whether the URLs may still be changed. Validation errors come back from the server through
- * `useActionState` rather than being duplicated client-side — the server's rules are the only
- * definition of what is valid, and two of them (the same-site rule and the active-conflict
- * rule) need data the browser does not have.
+ * Creation has its own multi-step wizard (`components/experiments/wizard`); this form only
+ * ever edits a experiment already attached to a website, so there is no website switcher here —
+ * the website is fixed and shown as context on the page around this form instead.
+ *
+ * Validation errors come back from the server through `useActionState` rather than being
+ * duplicated client-side — the server's rules are the only definition of what is valid, and
+ * two of them (the same-site rule and the active-conflict rule) need data the browser does not
+ * have.
  */
 export function ExperimentForm({
   action,
-  websites,
-  selectedWebsiteId,
   experimentId,
   defaults,
   urlsLocked = false,
@@ -47,16 +55,18 @@ export function ExperimentForm({
   cancelHref,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
-  /** Omitted when editing — the website is fixed and shown as context instead. */
-  websites?: WebsiteOption[];
-  selectedWebsiteId?: string;
-  experimentId?: string;
-  defaults?: {
-    name?: string;
+  experimentId: string;
+  defaults: {
+    name: string;
     description?: string;
-    controlUrl?: string;
-    variantUrl?: string;
-    conversionUrl?: string;
+    controlUrl: string;
+    controlMatchType: UrlMatchType;
+    controlWeight: number;
+    variants: VariantDefault[];
+    conversionUrl: string;
+    conversionMatchType: UrlMatchType;
+    primaryMetric: PrimaryMetric;
+    trafficAllocation: number;
   };
   /** True once the experiment has started: its targets are fixed from then on. */
   urlsLocked?: boolean;
@@ -65,14 +75,59 @@ export function ExperimentForm({
   cancelHref?: string;
 }) {
   const [state, formAction] = useActionState(action, IDLE);
-  const [websiteId, setWebsiteId] = useState(selectedWebsiteId ?? websites?.[0]?.id ?? "");
+  const [controlMatchType, setControlMatchType] = useState(defaults.controlMatchType);
+  const [conversionMatchType, setConversionMatchType] = useState(defaults.conversionMatchType);
+  const [primaryMetric, setPrimaryMetric] = useState(defaults.primaryMetric);
+  const [trafficAllocation, setTrafficAllocation] = useState(defaults.trafficAllocation);
+  const [controlWeight, setControlWeight] = useState(defaults.controlWeight);
+  const [variants, setVariants] = useState(defaults.variants);
 
-  const domain = websites?.find((website) => website.id === websiteId)?.domain;
+  function setVariantUrl(index: number, url: string) {
+    setVariants((previous) =>
+      previous.map((variant, i) => (i === index ? { ...variant, url } : variant)),
+    );
+  }
+
+  function addVariant() {
+    // A new arm joins on the same footing as control rather than inheriting a weight that
+    // would silently favour it.
+    setVariants((previous) => [...previous, { url: "", weight: controlWeight }]);
+  }
+
+  function removeVariant(index: number) {
+    setVariants((previous) =>
+      previous.length > 1 ? previous.filter((_, i) => i !== index) : previous,
+    );
+  }
+
+  const shares = armShares({
+    controlWeight,
+    variantWeights: variants.map((variant) => variant.weight),
+    trafficAllocation,
+  });
+
+  /** See the matching handler in the wizard — the editor speaks percentages of total traffic,
+   * storage keeps relative weights plus a separate allocation. */
+  function applyDistribution(next: { arms: DistributionArm[]; excluded: number }) {
+    const [control, ...variantPercents] = next.arms.map((arm) => arm.percent);
+    const anyWeight = next.arms.some((arm) => arm.percent > 0);
+
+    if (anyWeight) {
+      setControlWeight(control ?? 0);
+      setVariants((previous) =>
+        previous.map((variant, index) => ({ ...variant, weight: variantPercents[index] ?? 0 })),
+      );
+    }
+    setTrafficAllocation(Math.max(1, 100 - next.excluded));
+  }
 
   return (
     <form action={formAction} className="space-y-8">
-      {experimentId ? <input type="hidden" name="experimentId" value={experimentId} /> : null}
-      {websites ? <input type="hidden" name="websiteId" value={websiteId} /> : null}
+      <input type="hidden" name="experimentId" value={experimentId} />
+      <input type="hidden" name="controlMatchType" value={controlMatchType} />
+      <input type="hidden" name="conversionMatchType" value={conversionMatchType} />
+      <input type="hidden" name="primaryMetric" value={primaryMetric} />
+      <input type="hidden" name="controlWeight" value={controlWeight} />
 
       {state.status === "error" && state.message ? (
         <Alert variant="destructive" role="alert">
@@ -88,27 +143,6 @@ export function ExperimentForm({
       ) : null}
 
       <div className="space-y-5">
-        {websites && websites.length > 1 ? (
-          <div className="space-y-2">
-            <Label htmlFor="website">Website</Label>
-            <Select value={websiteId} onValueChange={setWebsiteId}>
-              <SelectTrigger id="website" className="w-full">
-                <SelectValue placeholder="Choose a website" />
-              </SelectTrigger>
-              <SelectContent>
-                {websites.map((website) => (
-                  <SelectItem key={website.id} value={website.id}>
-                    {website.name} — {website.domain}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              All three URLs below must be on this website&rsquo;s domain.
-            </p>
-          </div>
-        ) : null}
-
         <Field
           name="name"
           label="Experiment name"
@@ -118,7 +152,7 @@ export function ExperimentForm({
           {(props) => (
             <Input
               {...props}
-              defaultValue={defaults?.name}
+              defaultValue={defaults.name}
               placeholder="Pricing page redesign"
               maxLength={120}
               autoComplete="off"
@@ -136,7 +170,7 @@ export function ExperimentForm({
           {(props) => (
             <Textarea
               {...props}
-              defaultValue={defaults?.description}
+              defaultValue={defaults.description}
               placeholder="Does the rebuilt pricing page convert better than the original?"
               maxLength={500}
               rows={2}
@@ -151,64 +185,110 @@ export function ExperimentForm({
         <div className="space-y-1">
           <h3 className="text-sm font-medium">Pages to compare</h3>
           <p className="text-sm text-muted-foreground">
-            Traffic is split evenly: half of your visitors stay on the control, half are sent to the
-            variant.
+            Traffic is split evenly across the control and every variant below.
           </p>
         </div>
 
-        <div className="grid gap-5 sm:grid-cols-2">
-          <Field
-            name="controlUrl"
-            label="Control URL"
-            hint="The page visitors already land on. They stay here."
-            errors={state.fieldErrors?.["controlUrl"]}
-          >
-            {(props) => (
-              <Input
-                {...props}
-                defaultValue={defaults?.controlUrl}
-                placeholder={domain ? `https://${domain}/pricing` : "https://example.com/pricing"}
-                inputMode="url"
-                autoComplete="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                required
-              />
-            )}
-          </Field>
+        <Field
+          name="controlUrl"
+          label="Control URL"
+          hint="The page visitors already land on. They stay here."
+          errors={state.fieldErrors?.["controlUrl"]}
+        >
+          {(props) => (
+            <Input
+              {...props}
+              defaultValue={defaults.controlUrl}
+              inputMode="url"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              required
+            />
+          )}
+        </Field>
 
-          <Field
-            name="variantUrl"
-            label="Variant URL"
-            hint="The alternative page. Half your visitors are redirected here."
-            errors={state.fieldErrors?.["variantUrl"]}
+        <div className="space-y-2">
+          <Label htmlFor="edit-control-match">Control URL match type</Label>
+          <Select
+            value={controlMatchType}
+            onValueChange={(value) => setControlMatchType(value as UrlMatchType)}
+            disabled={urlsLocked}
           >
-            {(props) => (
-              <Input
-                {...props}
-                defaultValue={defaults?.variantUrl}
-                placeholder={
-                  domain ? `https://${domain}/pricing-v2` : "https://example.com/pricing-v2"
-                }
-                inputMode="url"
-                autoComplete="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                required
-              />
-            )}
-          </Field>
+            <SelectTrigger id="edit-control-match" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="EXACT">Exact page</SelectItem>
+              <SelectItem value="PREFIX">This page and anything beneath it</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="rounded-full bg-muted px-2 py-0.5 font-medium ring-1 ring-border/70">
-            50% control
-          </span>
-          <ArrowRight className="size-3" aria-hidden />
-          <span className="rounded-full bg-muted px-2 py-0.5 font-medium ring-1 ring-border/70">
-            50% variant
-          </span>
-          <span>Fixed for now — uneven splits are not available yet.</span>
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium">Variants</h4>
+
+          {variants.map((variant, index) => (
+            <div key={variant.id ?? `new-${index}`} className="flex items-end gap-2">
+              {/* Paired with `variantUrl` by document order — see `readVariants` in the action. */}
+              <input type="hidden" name="variantId" value={variant.id ?? ""} />
+              <input type="hidden" name="variantWeight" value={variant.weight} />
+              <div className="flex-1">
+                <Field
+                  name="variantUrl"
+                  id={`edit-variant-${index}`}
+                  label={`Variant ${index + 1} URL`}
+                >
+                  {(props) => (
+                    <Input
+                      {...props}
+                      value={variant.url}
+                      onChange={(event) => setVariantUrl(index, event.target.value)}
+                      inputMode="url"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      required
+                    />
+                  )}
+                </Field>
+              </div>
+
+              {variants.length > 1 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeVariant(index)}
+                  aria-label={`Remove variant ${index + 1}`}
+                >
+                  <X aria-hidden />
+                </Button>
+              ) : null}
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={addVariant}
+            className="w-full cursor-pointer rounded-lg border border-dashed border-border/70 py-2.5 text-center text-sm font-medium text-muted-foreground outline-none transition-colors hover:border-primary/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+          >
+            <Plus className="mr-1.5 inline size-3.5" aria-hidden />
+            Add URL Variant
+          </button>
+
+          {/* Zod collapses every issue under a nested array path (variants.N.url) to the
+           * single top-level key "variants", so a validation failure can't be pinned to one
+           * row — shown once here instead of a per-row message that would only ever be wrong. */}
+          {state.fieldErrors?.["variants"]?.length ? (
+            <ul className="space-y-1">
+              {state.fieldErrors["variants"].map((message) => (
+                <li key={message} className="text-xs text-destructive">
+                  {message}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
 
         <Field
@@ -220,8 +300,7 @@ export function ExperimentForm({
           {(props) => (
             <Input
               {...props}
-              defaultValue={defaults?.conversionUrl}
-              placeholder={domain ? `https://${domain}/thank-you` : "https://example.com/thank-you"}
+              defaultValue={defaults.conversionUrl}
               inputMode="url"
               autoComplete="off"
               autoCapitalize="none"
@@ -230,7 +309,72 @@ export function ExperimentForm({
             />
           )}
         </Field>
+
+        <div className="space-y-2">
+          <Label htmlFor="edit-conversion-match">Goal match type</Label>
+          <Select
+            value={conversionMatchType}
+            onValueChange={(value) => setConversionMatchType(value as UrlMatchType)}
+            disabled={urlsLocked}
+          >
+            <SelectTrigger id="edit-conversion-match" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="EXACT">Exact page</SelectItem>
+              <SelectItem value="PREFIX">This page and anything beneath it</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </fieldset>
+
+      <div className="space-y-5 border-t border-border/70 pt-5">
+        <div className="space-y-1">
+          <h3 className="text-sm font-medium">Traffic &amp; metrics</h3>
+          <p className="text-sm text-muted-foreground">
+            These can be changed at any time, even once the experiment is running — re-weighting
+            only affects visitors who have not been bucketed yet.
+          </p>
+        </div>
+
+        <input type="hidden" name="trafficAllocation" value={trafficAllocation} />
+        <TrafficDistribution
+          arms={[
+            { key: null, label: "Control", short: "C", percent: shares.control },
+            ...variants.map((variant, index) => ({
+              key: variant.id ?? `new-${index}`,
+              label: `Variant ${index + 1}`,
+              short: `V${index + 1}`,
+              percent: shares.variants[index] ?? 0,
+            })),
+          ]}
+          excluded={shares.excluded}
+          onChange={applyDistribution}
+        />
+        {state.fieldErrors?.["controlWeight"]?.length ? (
+          <p className="text-xs text-destructive">
+            {state.fieldErrors["controlWeight"].join(" ")}
+          </p>
+        ) : null}
+
+        <div className="space-y-2">
+          <Label htmlFor="edit-primary-metric">Primary metric</Label>
+          <Select value={primaryMetric} onValueChange={(value) => setPrimaryMetric(value as PrimaryMetric)}>
+            <SelectTrigger id="edit-primary-metric" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="CONVERSION_RATE">Conversion rate</SelectItem>
+              <SelectItem value="TIME_ON_PAGE">Average time on page</SelectItem>
+              <SelectItem value="PAGE_VIEWS">Page views per visitor</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Every metric is always measured — this only picks which one the results page treats
+            as &ldquo;currently ahead&rdquo;.
+          </p>
+        </div>
+      </div>
 
       {urlsLocked ? (
         <Alert>

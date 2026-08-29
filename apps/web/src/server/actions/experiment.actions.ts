@@ -25,6 +25,31 @@ function optionalText(formData: FormData, name: string): string | undefined {
   return trimmed === "" ? undefined : trimmed;
 }
 
+/** Reads a field as a number for Zod to validate; NaN on a bad value surfaces as a field error
+ * rather than silently falling back to a default. */
+function numberField(formData: FormData, name: string): number {
+  return Number(formData.get(name));
+}
+
+/**
+ * Reads the variant rows: repeated `variantUrl` fields (one per row, native `FormData` support
+ * for a repeated `name` — no JSON-encoding needed) paired by index with repeated `variantId`
+ * and `variantWeight` fields. An empty `variantId` means a row with no stored id yet. Values
+ * are left unnarrowed so Zod does the actual validation rather than this second-guessing it.
+ */
+function readVariants(
+  formData: FormData,
+): { id?: string; url: FormDataEntryValue; weight: number }[] {
+  const ids = formData.getAll("variantId").map(String);
+  const weights = formData.getAll("variantWeight");
+
+  return formData.getAll("variantUrl").map((url, index) => ({
+    id: ids[index] || undefined,
+    url,
+    weight: Number(weights[index]),
+  }));
+}
+
 export async function createExperimentAction(
   _previous: FormState,
   formData: FormData,
@@ -37,10 +62,14 @@ export async function createExperimentAction(
       name: formData.get("name"),
       description: optionalText(formData, "description"),
       controlUrl: formData.get("controlUrl"),
-      variantUrl: formData.get("variantUrl"),
+      controlMatchType: formData.get("controlMatchType"),
+      controlWeight: numberField(formData, "controlWeight"),
+      variants: readVariants(formData),
       conversionUrl: formData.get("conversionUrl"),
-      // Match types and the traffic split are not part of the MVP form. The service pins the
-      // split at 50 regardless, and the schema defaults both match types to EXACT.
+      conversionMatchType: formData.get("conversionMatchType"),
+      primaryMetric: formData.get("primaryMetric"),
+      trafficAllocation: numberField(formData, "trafficAllocation"),
+      // Traffic is split evenly across every arm — not part of the form, derived server-side.
     }),
   );
 
@@ -65,8 +94,13 @@ export async function updateExperimentAction(
       name: formData.get("name"),
       description: optionalText(formData, "description"),
       controlUrl: formData.get("controlUrl"),
-      variantUrl: formData.get("variantUrl"),
+      controlMatchType: formData.get("controlMatchType"),
+      controlWeight: numberField(formData, "controlWeight"),
+      variants: readVariants(formData),
       conversionUrl: formData.get("conversionUrl"),
+      conversionMatchType: formData.get("conversionMatchType"),
+      primaryMetric: formData.get("primaryMetric"),
+      trafficAllocation: numberField(formData, "trafficAllocation"),
     }),
   );
 
@@ -119,5 +153,5 @@ export async function deleteExperimentAction(
   }
 
   revalidatePath(routes.websites.detail(websiteId));
-  redirect(websiteId ? routes.websites.detail(websiteId) : routes.dashboard);
+  redirect(websiteId ? routes.websites.detail(websiteId) : routes.experiments.list);
 }

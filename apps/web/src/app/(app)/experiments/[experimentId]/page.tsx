@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, Target } from "lucide-react";
+import { ArrowLeft, Target } from "lucide-react";
 
 import { PageHeader } from "@/components/common/page-header";
+import { DeleteExperimentDialog } from "@/components/experiments/delete-experiment-dialog";
 import { ExperimentForm } from "@/components/experiments/experiment-form";
 import { RangePicker } from "@/components/experiments/range-picker";
 import { ExperimentResults } from "@/components/experiments/results";
@@ -11,12 +12,15 @@ import { SharePanel } from "@/components/experiments/share-panel";
 import { ExperimentStatusBadge } from "@/components/experiments/status-badge";
 import { StatusControls } from "@/components/experiments/status-controls";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { env } from "@/env";
 import { parseRangeKey, resolveRange } from "@/lib/date-range";
 import { formatDate } from "@/lib/format";
 import { routes } from "@/lib/routes";
+import { armShares } from "@/lib/traffic";
 import {
   changeExperimentStatusAction,
+  deleteExperimentAction,
   updateExperimentAction,
 } from "@/server/actions/experiment.actions";
 import {
@@ -90,6 +94,22 @@ export default async function ExperimentPage({
     resolveRange(rangeKey),
   );
 
+  const shares = armShares({
+    controlWeight: experiment.controlWeight,
+    variantWeights: experiment.variants.map((variant) => variant.weight),
+    trafficAllocation: experiment.trafficAllocation,
+  });
+
+  // `stats.variants` is built from `experiment.variants.map(v => v.id)`, in that same order —
+  // zipping by index rather than searching keeps this a single pass, not one lookup per row.
+  const variantResults = experiment.variants.map((variant, index) => ({
+    variantId: variant.id,
+    url: variant.url,
+    label: `Variant ${index + 1}`,
+    share: shares.variants[index] ?? 0,
+    stats: stats.variants[index]!.stats,
+  }));
+
   return (
     <>
       <PageHeader
@@ -116,22 +136,21 @@ export default async function ExperimentPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Arm
-              label="Control · 50%"
+              label={`Control · ${shares.control}%`}
               url={experiment.controlUrl}
               description="The original page. These visitors stay where they landed."
             />
-            <ArrowRight
-              className="mx-auto hidden size-4 text-muted-foreground sm:block"
-              aria-hidden
-            />
-            <Arm
-              label="Variant · 50%"
-              url={experiment.variantUrl}
-              description="These visitors are redirected here instead."
-              emphasis
-            />
+            {experiment.variants.map((variant, index) => (
+              <Arm
+                key={variant.id}
+                label={`Variant ${index + 1} · ${shares.variants[index] ?? 0}%`}
+                url={variant.url}
+                description="These visitors are redirected here instead."
+                emphasis
+              />
+            ))}
           </div>
 
           <div className="flex gap-3 border-t border-border/70 pt-4">
@@ -144,7 +163,7 @@ export default async function ExperimentPage({
             </div>
           </div>
 
-          <dl className="grid gap-4 text-xs text-muted-foreground sm:grid-cols-3">
+          <dl className="grid gap-4 text-xs text-muted-foreground sm:grid-cols-4">
             <div>
               <dt className="font-medium">Created</dt>
               <dd className="mt-0.5 text-foreground">{formatDate(experiment.createdAt)}</dd>
@@ -158,7 +177,14 @@ export default async function ExperimentPage({
             <div>
               <dt className="font-medium">Traffic split</dt>
               <dd className="mt-0.5 text-foreground">
-                {100 - experiment.variantSplit} / {experiment.variantSplit}
+                {[shares.control, ...shares.variants].map((share) => `${share}%`).join(" / ")}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium">Included in test</dt>
+              <dd className="mt-0.5 text-foreground">
+                {experiment.trafficAllocation}%{" "}
+                {experiment.trafficAllocation < 100 ? "of visitors" : "(everyone)"}
               </dd>
             </div>
           </dl>
@@ -190,10 +216,12 @@ export default async function ExperimentPage({
           <RangePicker value={rangeKey} />
         </div>
         <ExperimentResults
-          stats={stats}
+          control={stats.control}
+          controlShare={shares.control}
+          variants={variantResults}
+          isEmpty={stats.isEmpty}
           controlUrl={experiment.controlUrl}
-          variantUrl={experiment.variantUrl}
-          variantSplit={experiment.variantSplit}
+          primaryMetric={experiment.primaryMetric}
           isDraft={isDraft}
         />
       </section>
@@ -230,12 +258,41 @@ export default async function ExperimentPage({
                 name: experiment.name,
                 description: experiment.description ?? undefined,
                 controlUrl: experiment.controlUrl,
-                variantUrl: experiment.variantUrl,
+                controlMatchType: experiment.controlMatchType,
+                controlWeight: experiment.controlWeight,
+                variants: experiment.variants.map((variant) => ({
+                  id: variant.id,
+                  url: variant.url,
+                  weight: variant.weight,
+                })),
                 conversionUrl: experiment.conversionUrl,
+                conversionMatchType: experiment.conversionMatchType,
+                primaryMetric: experiment.primaryMetric,
+                trafficAllocation: experiment.trafficAllocation,
               }}
               submitLabel="Save changes"
               pendingLabel="Saving…"
             />
+
+            <Separator className="my-6" />
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium">Delete this experiment</p>
+                <p className="text-sm text-pretty text-muted-foreground">
+                  {stats.isEmpty
+                    ? "Nothing has been recorded yet, so no results would be lost."
+                    : "Removes the experiment and every visitor, event and conversion recorded under it. Archive it instead to stop it running but keep the results."}
+                </p>
+              </div>
+              <DeleteExperimentDialog
+                action={deleteExperimentAction}
+                experimentId={experiment.id}
+                websiteId={experiment.websiteId}
+                experimentName={experiment.name}
+                hasResults={!stats.isEmpty}
+              />
+            </div>
           </CardContent>
         </Card>
       </section>

@@ -35,8 +35,40 @@ export async function createWebsiteAction(
   }
 
   // Outside runAction: redirect() signals by throwing, and must reach Next.js uncaught.
-  revalidatePath(routes.dashboard);
   redirect(routes.websites.detail(result.data.id));
+}
+
+export interface CreateWebsiteInlineState extends FormState {
+  /** Present on success, for a caller that needs the created row without navigating away. */
+  website?: { id: string; name: string; domain: string };
+}
+
+/**
+ * Same creation as `createWebsiteAction`, for a caller that can't navigate away — the
+ * experiment wizard's "Add another website" dialog, which needs to select the new website and
+ * keep going rather than leaving the flow it was opened from.
+ */
+export async function createWebsiteInlineAction(
+  _previous: CreateWebsiteInlineState,
+  formData: FormData,
+): Promise<CreateWebsiteInlineState> {
+  const user = await requireUser();
+
+  const result = await runAction(() =>
+    websiteService.createWebsite(user.id, {
+      name: formData.get("name"),
+      domain: formData.get("domain"),
+    }),
+  );
+
+  if (!result.ok) {
+    return result.state;
+  }
+
+  return {
+    status: "success",
+    website: { id: result.data.id, name: result.data.name, domain: result.data.domain },
+  };
 }
 
 export async function updateWebsiteAction(
@@ -58,7 +90,6 @@ export async function updateWebsiteAction(
     return result.state;
   }
 
-  revalidatePath(routes.dashboard);
   revalidatePath(routes.websites.detail(websiteId));
 
   return { status: "success", message: "Website updated." };
@@ -77,8 +108,7 @@ export async function deleteWebsiteAction(
     return result.state;
   }
 
-  revalidatePath(routes.dashboard);
-  redirect(routes.dashboard);
+  redirect(routes.experiments.list);
 }
 
 /**

@@ -50,10 +50,5 @@ export function proxy(request: NextRequest) {
 export const config = {
   // Only the protected areas. Auth.js routes, static assets and the public SDK bundle must
   // never be intercepted — redirecting the OAuth callback would break sign-in entirely.
-  matcher: [
-    "/dashboard/:path*",
-    "/get-started/:path*",
-    "/websites/:path*",
-    "/experiments/:path*",
-  ],
+  matcher: ["/get-started/:path*", "/websites/:path*", "/experiments/:path*"],
 };

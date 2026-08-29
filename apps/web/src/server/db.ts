@@ -42,4 +42,7 @@ export type { PrismaClient } from "@/generated/prisma/client";
  * a caller can compose several writes into one transaction without the repository knowing
  * which of the two it received.
  */
-export type DbClient = Omit<PrismaClient, "$connect" | "$disconnect" | "$transaction" | "$extends">;
+export type DbClient = Omit<
+  PrismaClient,
+  "$connect" | "$disconnect" | "$transaction" | "$extends" | "$on" | "$use"
+>;

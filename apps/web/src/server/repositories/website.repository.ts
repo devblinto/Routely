@@ -35,49 +35,6 @@ export function listWebsitesForUser(userId: string, client: DbClient = db): Prom
   });
 }
 
-/** Counts the dashboard needs per website: total experiments, and how many are running. */
-const WEBSITE_COUNTS = {
-  _count: { select: { experiments: true } },
-} satisfies Prisma.WebsiteInclude;
-
-export type WebsiteWithCounts = Prisma.WebsiteGetPayload<{
-  include: typeof WEBSITE_COUNTS;
-}> & { activeExperiments: number };
-
-/**
- * The dashboard list, with each website's experiment count.
- *
- * The count is requested as part of the same query rather than looked up per row: a list of
- * N websites would otherwise cost N+1 round trips, and the number grows with the customer.
- */
-export async function listWebsitesWithCounts(
-  userId: string,
-  client: DbClient = db,
-): Promise<WebsiteWithCounts[]> {
-  const [websites, activeByWebsite] = await Promise.all([
-    client.website.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      include: WEBSITE_COUNTS,
-    }),
-    // One grouped query for the running counts rather than a filtered relation count, which
-    // Prisma renders as a correlated subquery per row. Two round trips total, regardless of
-    // how many websites the user has.
-    client.experiment.groupBy({
-      by: ["websiteId"],
-      where: { status: "ACTIVE", website: { userId } },
-      _count: { _all: true },
-    }),
-  ]);
-
-  const active = new Map(activeByWebsite.map((row) => [row.websiteId, row._count._all]));
-
-  return websites.map((website) => ({
-    ...website,
-    activeExperiments: active.get(website.id) ?? 0,
-  }));
-}
-
 export function findWebsiteForUser(
   websiteId: string,
   userId: string,

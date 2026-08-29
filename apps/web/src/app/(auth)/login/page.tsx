@@ -15,8 +15,8 @@ export const metadata: Metadata = { title: "Sign in" };
 
 /** Only same-site relative paths survive; see the matching guard in the sign-in action. */
 function safeCallbackUrl(value: string | undefined): string {
-  if (!value) return routes.dashboard;
-  return value.startsWith("/") && !value.startsWith("//") ? value : routes.dashboard;
+  if (!value) return routes.experiments.list;
+  return value.startsWith("/") && !value.startsWith("//") ? value : routes.experiments.list;
 }
 
 /**
@@ -42,7 +42,7 @@ export default async function LoginPage({
   const authError = describeAuthError(params.error);
 
   // Arriving with a callbackUrl means the visitor was stopped on the way somewhere.
-  const wasRedirected = callbackUrl !== routes.dashboard;
+  const wasRedirected = callbackUrl !== routes.experiments.list;
 
   return (
     <div className="space-y-6">

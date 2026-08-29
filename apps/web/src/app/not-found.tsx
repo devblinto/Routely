@@ -15,7 +15,7 @@ export default function NotFound() {
         description="The page you were looking for does not exist, or you no longer have access to it."
         action={
           <Button asChild>
-            <Link href={routes.dashboard}>Back to dashboard</Link>
+            <Link href={routes.experiments.list}>Back to experiments</Link>
           </Button>
         }
       />

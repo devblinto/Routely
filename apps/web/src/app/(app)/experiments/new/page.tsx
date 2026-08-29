@@ -4,12 +4,13 @@ import { ArrowLeft, Globe, Plus } from "lucide-react";
 
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
-import { ExperimentForm } from "@/components/experiments/experiment-form";
+import { ExperimentWizard } from "@/components/experiments/wizard/experiment-wizard";
+import { AddWebsiteDialog } from "@/components/websites/add-website-dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { routes } from "@/lib/routes";
 import { createExperimentAction } from "@/server/actions/experiment.actions";
 import { requireUser } from "@/server/auth/session";
+import * as experimentService from "@/server/services/experiment.service";
 import * as websiteService from "@/server/services/website.service";
 
 export const metadata: Metadata = { title: "New experiment" };
@@ -20,15 +21,16 @@ export default async function NewExperimentPage({
   searchParams: Promise<{ websiteId?: string }>;
 }) {
   const user = await requireUser();
-  const [{ websiteId }, websites] = await Promise.all([
+  const [{ websiteId }, websites, activeExperiments] = await Promise.all([
     searchParams,
     websiteService.listWebsites(user.id),
+    experimentService.listAllExperiments(user.id, { status: "ACTIVE" }),
   ]);
 
   // Only the actor's own websites are offered, and the action re-checks ownership anyway —
   // a websiteId typed into the query string cannot select somebody else's website.
   const preselected = websites.find((website) => website.id === websiteId);
-  const backHref = preselected ? routes.websites.detail(preselected.id) : routes.dashboard;
+  const backHref = preselected ? routes.websites.detail(preselected.id) : routes.experiments.list;
 
   return (
     <>
@@ -36,7 +38,7 @@ export default async function NewExperimentPage({
         eyebrow={
           <Link href={backHref} className="inline-flex items-center gap-1 hover:text-foreground">
             <ArrowLeft className="size-3.5" aria-hidden />
-            {preselected ? preselected.name : "Websites"}
+            {preselected ? preselected.name : "Experiments"}
           </Link>
         }
         title="New experiment"
@@ -49,44 +51,29 @@ export default async function NewExperimentPage({
           title="Add a website first"
           description="An experiment belongs to a website, which is what supplies the tracking snippet and the domain its URLs must be on."
           action={
-            <Button asChild>
-              <Link href={routes.websites.new}>
-                <Plus aria-hidden />
-                Add website
-              </Link>
-            </Button>
+            <AddWebsiteDialog
+              trigger={
+                <Button>
+                  <Plus aria-hidden />
+                  Add website
+                </Button>
+              }
+            />
           }
         />
       ) : (
-        <Card className="max-w-2xl">
-          <CardHeader>
-            <CardTitle>Experiment setup</CardTitle>
-            <CardDescription>
-              {preselected ? (
-                <>
-                  All three URLs must be on{" "}
-                  <span className="font-medium">{preselected.domain}</span> or one of its
-                  subdomains. The experiment is saved as a draft — nothing is redirected until you
-                  activate it.
-                </>
-              ) : (
-                <>
-                  The experiment is saved as a draft — nothing is redirected until you activate it.
-                </>
-              )}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ExperimentForm
-              action={createExperimentAction}
-              websites={websites.map(({ id, name, domain }) => ({ id, name, domain }))}
-              selectedWebsiteId={preselected?.id}
-              submitLabel="Create draft"
-              pendingLabel="Creating…"
-              cancelHref={backHref}
-            />
-          </CardContent>
-        </Card>
+        <ExperimentWizard
+          action={createExperimentAction}
+          websites={websites.map(({ id, name, domain }) => ({ id, name, domain }))}
+          activeExperiments={activeExperiments.map((experiment) => ({
+            id: experiment.id,
+            name: experiment.name,
+            websiteId: experiment.websiteId,
+            controlUrl: experiment.controlUrl,
+            controlMatchType: experiment.controlMatchType,
+          }))}
+          preselectedWebsiteId={preselected?.id}
+        />
       )}
     </>
   );
