@@ -1,22 +1,23 @@
 import { z } from "zod";
 
-import {
-  absoluteUrlSchema,
-  displayNameSchema,
-  domainSchema,
-  idSchema,
-} from "@/validation/common";
+import { SiteProtocol } from "@/generated/prisma/enums";
+import { absoluteUrlSchema, displayNameSchema, domainSchema, idSchema } from "@/validation/common";
+
+/** Scheme the site is served over. Defaults to https — http is the local-development case. */
+export const siteProtocolSchema = z.enum(SiteProtocol).default("HTTPS");
 
 /** Input for creating a website. The public site id is generated server-side, never supplied. */
 export const createWebsiteSchema = z.object({
   name: displayNameSchema,
   domain: domainSchema,
+  protocol: siteProtocolSchema,
 });
 
 export const updateWebsiteSchema = z.object({
   websiteId: idSchema,
   name: displayNameSchema.optional(),
   domain: domainSchema.optional(),
+  protocol: siteProtocolSchema.optional(),
 });
 
 export const websiteIdSchema = z.object({

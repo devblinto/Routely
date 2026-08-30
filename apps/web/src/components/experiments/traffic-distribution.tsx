@@ -68,7 +68,13 @@ export function TrafficDistribution({
   /** Every segment of the bar, in order, with excluded always last. */
   const segments = [
     ...arms.map((arm, index) => ({ ...arm, color: armColor(index) })),
-    { key: "__excluded__", label: "Excluded", short: "×", percent: excluded, color: EXCLUDED_COLOR },
+    {
+      key: "__excluded__",
+      label: "Excluded",
+      short: "×",
+      percent: excluded,
+      color: EXCLUDED_COLOR,
+    },
   ];
 
   function emit(percents: number[]) {

@@ -64,7 +64,12 @@ export default async function NewExperimentPage({
       ) : (
         <ExperimentWizard
           action={createExperimentAction}
-          websites={websites.map(({ id, name, domain }) => ({ id, name, domain }))}
+          websites={websites.map(({ id, name, domain, protocol }) => ({
+            id,
+            name,
+            domain,
+            protocol,
+          }))}
           activeExperiments={activeExperiments.map((experiment) => ({
             id: experiment.id,
             name: experiment.name,

@@ -23,8 +23,16 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
   const [collapsed, setCollapsed] = useState(false);
   const navbarContent = useNavbarSlot();
 
+  // `fixed inset-0` rather than a height: the shell manages its own scrolling in `<main>`, so
+  // it must not also contribute height to the document. Taking it out of flow leaves `<body>`
+  // with nothing to scroll, which is the only way to guarantee a second scrollbar cannot appear
+  // — a height-based shell is always one rounding difference (a horizontal scrollbar, browser
+  // chrome, an injected element) away from overflowing by a few pixels.
+  //
+  // Scoped to the dashboard: the public share page and the auth screens scroll the document
+  // normally and never mount this component.
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="fixed inset-0 flex overflow-hidden bg-background">
       <aside
         className={cn(
           "relative hidden shrink-0 flex-col border-r border-border bg-sidebar lg:flex",
@@ -63,7 +71,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
         </button>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur sm:px-6">
           <MobileNav />
           <div className="lg:hidden">
@@ -75,7 +83,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
           <UserMenu user={user} />
         </header>
 
-        <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-6xl space-y-6">{children}</div>
         </main>
       </div>

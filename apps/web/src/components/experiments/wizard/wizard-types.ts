@@ -1,9 +1,10 @@
-import type { PrimaryMetric, UrlMatchType } from "@/generated/prisma/enums";
+import type { PrimaryMetric, SiteProtocol, UrlMatchType } from "@/generated/prisma/enums";
 
 export interface WizardWebsite {
   id: string;
   name: string;
   domain: string;
+  protocol: SiteProtocol;
 }
 
 /** The subset of an active experiment the summary step's conflict check needs. */

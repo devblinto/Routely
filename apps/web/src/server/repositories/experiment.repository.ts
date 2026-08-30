@@ -163,6 +163,35 @@ export async function countExperimentsByStatus(
   return totals;
 }
 
+/**
+ * Experiment counts per website for one user, split into total and currently running.
+ *
+ * One grouped query covering every website at once, rather than a count per row: the Get
+ * started table lists them all, and a per-row query would scale with how many websites an
+ * account has.
+ */
+export async function countExperimentsByWebsite(
+  userId: string,
+  client: DbClient = db,
+): Promise<Map<string, { total: number; active: number }>> {
+  const rows = await client.experiment.groupBy({
+    by: ["websiteId", "status"],
+    where: { website: { userId } },
+    _count: { _all: true },
+  });
+
+  const totals = new Map<string, { total: number; active: number }>();
+
+  for (const row of rows) {
+    const entry = totals.get(row.websiteId) ?? { total: 0, active: 0 };
+    entry.total += row._count._all;
+    if (row.status === "ACTIVE") entry.active += row._count._all;
+    totals.set(row.websiteId, entry);
+  }
+
+  return totals;
+}
+
 export function createExperiment(
   data: Prisma.ExperimentUncheckedCreateInput,
   client: DbClient = db,

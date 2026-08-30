@@ -74,7 +74,9 @@ describe("drawArm", () => {
   it("falls back to control rather than throwing when every arm is parked", () => {
     // Rejected by validation server-side, but a tracking script must not throw on a config it
     // somehow received anyway.
-    expect(drawArm(0, [{ id: "var_1", url: "https://acme.test/v1", weight: 0 }], fixed(0.5))).toBeNull();
+    expect(
+      drawArm(0, [{ id: "var_1", url: "https://acme.test/v1", weight: 0 }], fixed(0.5)),
+    ).toBeNull();
   });
 
   it("ignores a non-finite or negative weight instead of corrupting the range", () => {

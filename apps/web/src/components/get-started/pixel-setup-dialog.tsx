@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import type { SiteProtocol } from "@/generated/prisma/enums";
 import type { FormState } from "@/lib/form-state";
 
 /**
@@ -22,17 +23,33 @@ export function PixelSetupDialog({
   website,
   sdkUrl,
   verifyAction,
+  triggerLabel = "Set up Routely",
+  triggerVariant = "default",
+  triggerClassName,
 }: {
-  website: { id: string; name: string; domain: string; publicSiteId: string };
+  website: {
+    id: string;
+    name: string;
+    domain: string;
+    protocol: SiteProtocol;
+    publicSiteId: string;
+  };
   sdkUrl: string;
   verifyAction: (state: FormState, formData: FormData) => Promise<FormState>;
+  /** The websites table reuses this dialog per row, where "Re-check pixel" reads better on a
+   * site that is already installed than a generic "Set up Routely". */
+  triggerLabel?: string;
+  triggerVariant?: "default" | "outline";
+  /** Lets a caller size the trigger — the websites table gives every row's buttons equal
+   * width so the column lines up regardless of which label each row shows. */
+  triggerClassName?: string;
 }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button size="sm">
+        <Button size="sm" variant={triggerVariant} className={triggerClassName}>
           <Rocket aria-hidden />
-          Set up Routely
+          {triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent className="flex h-[85vh] max-h-[85vh] flex-col gap-0 overflow-hidden p-0">

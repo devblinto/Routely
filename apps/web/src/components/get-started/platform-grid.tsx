@@ -39,13 +39,7 @@ const PLATFORMS: Platform[] = [
  * point the guide below reveals its instructions. Every other tile is a disabled preview of
  * what's coming, never selectable.
  */
-export function PlatformGrid({
-  selected,
-  onSelect,
-}: {
-  selected: boolean;
-  onSelect: () => void;
-}) {
+export function PlatformGrid({ selected, onSelect }: { selected: boolean; onSelect: () => void }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {PLATFORMS.map((platform) => {

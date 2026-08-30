@@ -190,8 +190,8 @@ export function ExperimentResults({
               </>
             ) : null}
             . This is a description of the numbers so far, <strong>not statistical proof</strong>.
-            Routely does not test for significance, and a lead can reverse as more visitors
-            arrive — so treat it as a signal to keep watching, not a result to act on.
+            Routely does not test for significance, and a lead can reverse as more visitors arrive —
+            so treat it as a signal to keep watching, not a result to act on.
           </AlertDescription>
         </Alert>
       ) : null}

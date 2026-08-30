@@ -108,10 +108,7 @@ async function readCapped(response: Response): Promise<string> {
  * that possible — the automatic mode would resolve the chain internally and only hand back the
  * final response, by which point an off-limits host has already been contacted.
  */
-async function fetchHtml(
-  startUrl: URL,
-  domain: string,
-): Promise<{ html: string; finalUrl: URL }> {
+async function fetchHtml(startUrl: URL, domain: string): Promise<{ html: string; finalUrl: URL }> {
   let url = startUrl;
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {

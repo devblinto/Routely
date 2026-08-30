@@ -24,10 +24,7 @@ import type { FormState } from "@/lib/form-state";
 import { armShares } from "@/lib/traffic";
 import { controlUrlsConflict, isSameSite, isSameUrl, normalizeUrl } from "@/lib/url";
 import { cn } from "@/lib/utils";
-import {
-  checkInstallOnPageAction,
-  type InstallCheckResult,
-} from "@/server/actions/pixel.actions";
+import { checkInstallOnPageAction, type InstallCheckResult } from "@/server/actions/pixel.actions";
 
 interface CheckResult {
   key: string;
@@ -38,9 +35,7 @@ interface CheckResult {
 
 /** The install check's lifecycle, kept separate from the rules computed synchronously. */
 type InstallState =
-  | { phase: "idle" }
-  | { phase: "checking" }
-  | { phase: "done"; result: InstallCheckResult };
+  { phase: "idle" } | { phase: "checking" } | { phase: "done"; result: InstallCheckResult };
 
 /**
  * The pre-publish checklist, computed entirely client-side from values already on screen plus
@@ -139,7 +134,11 @@ function installCheck(state: InstallState, controlUrl: string): CheckResult {
   const base = { key: "install", label: "Script installation" };
 
   if (state.phase === "checking") {
-    return { ...base, status: "pending", detail: `Loading ${controlUrl} to look for your snippet…` };
+    return {
+      ...base,
+      status: "pending",
+      detail: `Loading ${controlUrl} to look for your snippet…`,
+    };
   }
 
   if (state.phase === "idle") {

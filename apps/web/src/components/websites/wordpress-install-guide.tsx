@@ -45,9 +45,8 @@ const WORDPRESS_OPTIONS = [
     title: "A header/footer plugin",
     body: (
       <>
-        Survives theme updates. Install <em>WPCode</em> or <em>Insert Headers and Footers</em>,
-        then paste the snippet into its{" "}
-        <span className="font-medium text-foreground">Header</span> box.
+        Survives theme updates. Install <em>WPCode</em> or <em>Insert Headers and Footers</em>, then
+        paste the snippet into its <span className="font-medium text-foreground">Header</span> box.
       </>
     ),
   },
@@ -66,8 +65,8 @@ const WORDPRESS_OPTIONS = [
       <>
         Edit <span className="font-mono text-xs">header.php</span> in a{" "}
         <span className="font-medium text-foreground">child theme</span> and paste it before{" "}
-        <code className="font-mono text-xs">&lt;/head&gt;</code>. Editing a parent theme
-        directly loses the change on the next update.
+        <code className="font-mono text-xs">&lt;/head&gt;</code>. Editing a parent theme directly
+        loses the change on the next update.
       </>
     ),
   },

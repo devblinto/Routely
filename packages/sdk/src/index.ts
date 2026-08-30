@@ -216,8 +216,7 @@ export async function boot(): Promise<RoutelyState | null> {
       // can never move an existing visitor.
       resolveAssignment(experiment, stores, { forced: forcedVariantId(experiment) }).variantId,
     { visitorId: identity.id },
-    (experiment) =>
-      resolveInclusion(experiment.id, experiment.trafficAllocation, stores).included,
+    (experiment) => resolveInclusion(experiment.id, experiment.trafficAllocation, stores).included,
   );
 
   if (!decision) {

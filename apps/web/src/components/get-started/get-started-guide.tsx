@@ -16,7 +16,9 @@ import {
   WordPressInstallGuide,
 } from "@/components/websites/wordpress-install-guide";
 import { IDLE, type FormState } from "@/lib/form-state";
+import type { SiteProtocol } from "@/generated/prisma/enums";
 import { routes } from "@/lib/routes";
+import { siteUrl } from "@/lib/site-url";
 import { cn } from "@/lib/utils";
 
 type StepKey = "install" | "verify" | "done";
@@ -41,7 +43,13 @@ export function GetStartedGuide({
   verifyAction,
   initialPixelDetected,
 }: {
-  website: { id: string; name: string; domain: string; publicSiteId: string };
+  website: {
+    id: string;
+    name: string;
+    domain: string;
+    protocol: SiteProtocol;
+    publicSiteId: string;
+  };
   sdkUrl: string;
   verifyAction: (state: FormState, formData: FormData) => Promise<FormState>;
   initialPixelDetected: boolean;
@@ -140,7 +148,10 @@ export function GetStartedGuide({
                   <PlacementRules />
                 </div>
               ) : (
-                <PlatformGrid selected={platformSelected} onSelect={() => setPlatformSelected(true)} />
+                <PlatformGrid
+                  selected={platformSelected}
+                  onSelect={() => setPlatformSelected(true)}
+                />
               )}
               <div className="flex justify-end">
                 <Button disabled={!platformSelected} onClick={() => setStep("verify")}>
@@ -177,8 +188,8 @@ export function GetStartedGuide({
                     <Input
                       id="verify-url"
                       name="url"
-                      defaultValue={`https://${website.domain}/`}
-                      placeholder={`https://${website.domain}/`}
+                      defaultValue={siteUrl(website)}
+                      placeholder={siteUrl(website)}
                       inputMode="url"
                       autoComplete="off"
                       autoCapitalize="none"
@@ -189,8 +200,8 @@ export function GetStartedGuide({
                     <SubmitButton pendingLabel="Checking…">Verify installation</SubmitButton>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Any page on {website.domain} that has the snippet. We load it and look for
-                    your site id in the HTML.
+                    Any page on {website.domain} that has the snippet. We load it and look for your
+                    site id in the HTML.
                   </p>
                 </div>
 
@@ -214,8 +225,8 @@ export function GetStartedGuide({
                 <CardTitle>You&apos;re all set</CardTitle>
               </div>
               <CardDescription>
-                The snippet is live on {website.name}. It starts recording as soon as an
-                experiment is running on a page it covers — create one whenever you&apos;re ready.
+                The snippet is live on {website.name}. It starts recording as soon as an experiment
+                is running on a page it covers — create one whenever you&apos;re ready.
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -1,13 +1,15 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 
 import { Field } from "@/components/common/field";
 import { SubmitButton } from "@/components/common/submit-button";
+import { DomainField } from "@/components/websites/domain-field";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -16,13 +18,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import type { SiteProtocol } from "@/generated/prisma/enums";
 import {
   createWebsiteInlineAction,
   type CreateWebsiteInlineState,
 } from "@/server/actions/website.actions";
 
 const IDLE: CreateWebsiteInlineState = { status: "idle" };
+
+export interface CreatedWebsite {
+  id: string;
+  name: string;
+  domain: string;
+  protocol: SiteProtocol;
+}
 
 const DEFAULT_TRIGGER = (
   <button
@@ -35,12 +44,75 @@ const DEFAULT_TRIGGER = (
 );
 
 /**
+ * The form half, deliberately split from the dialog.
+ *
+ * It owns the action and reports success upward; the dialog owns whether it is open. Keeping
+ * those in separate components is what lets the success path live in an effect without any
+ * component setting its *own* state there — closing is the parent's business, and a child
+ * calling a parent's callback from an effect is ordinary React.
+ */
+function AddWebsiteForm({
+  onSuccess,
+  onCancel,
+}: {
+  onSuccess: (website: CreatedWebsite) => void;
+  onCancel: () => void;
+}) {
+  const [state, formAction] = useActionState(createWebsiteInlineAction, IDLE);
+
+  // Which result has already been acted on. A ref rather than state: this drives no rendering,
+  // and it keeps the effect idempotent when it re-runs because `onSuccess` changed identity
+  // rather than because a new result arrived.
+  const handledRef = useRef(state);
+
+  useEffect(() => {
+    if (handledRef.current === state) return;
+    handledRef.current = state;
+
+    if (state.status === "success" && state.website) {
+      onSuccess(state.website);
+    }
+  }, [state, onSuccess]);
+
+  return (
+    <form action={formAction} className="space-y-5">
+      {state.status === "error" && state.message ? (
+        <Alert variant="destructive" role="alert">
+          <AlertTitle>Could not save</AlertTitle>
+          <AlertDescription>{state.message}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <Field
+        name="name"
+        label="Name"
+        hint="Only used to identify this website inside Routely."
+        errors={state.fieldErrors?.["name"]}
+      >
+        {(props) => (
+          <Input {...props} placeholder="Acme Store" maxLength={120} autoComplete="off" required />
+        )}
+      </Field>
+
+      <DomainField errors={state.fieldErrors?.["domain"]} />
+
+      <div className="flex justify-end gap-2 pt-1">
+        <Button type="button" variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <SubmitButton pendingLabel="Adding…">Add website</SubmitButton>
+      </div>
+    </form>
+  );
+}
+
+/**
  * Website creation as a popup rather than a page — there is no standalone `/websites/new`
  * route. Uses `createWebsiteInlineAction` rather than `createWebsiteAction` because that one
  * redirects to the new website's own page on success, which would navigate away from wherever
  * this dialog was opened.
  *
- * Without an `onCreated` callback (the plain "add a website" case, e.g. an empty state) the
+ * Without an `onCreated` callback (the plain "add a website" case, e.g. the table header) the
  * dialog falls back to `router.refresh()` so the server page re-renders with the new website
  * present. Callers that need the created row directly — the experiment wizard, which appends it
  * to a website picker without a round trip — pass `onCreated` instead.
@@ -49,30 +121,33 @@ export function AddWebsiteDialog({
   onCreated,
   trigger = DEFAULT_TRIGGER,
 }: {
-  onCreated?: (website: { id: string; name: string; domain: string }) => void;
+  onCreated?: (website: CreatedWebsite) => void;
   trigger?: React.ReactNode;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [state, formAction] = useActionState(createWebsiteInlineAction, IDLE);
 
-  // Render-time state adjustment (not an effect): react to the action's result the moment it
-  // changes, without an extra effect-triggered render pass.
-  const [lastHandledState, setLastHandledState] = useState(state);
-  if (state !== lastHandledState) {
-    setLastHandledState(state);
-    if (state.status === "success" && state.website) {
-      if (onCreated) {
-        onCreated(state.website);
-      } else {
-        router.refresh();
-      }
-      setOpen(false);
+  // Remounts the form on each open so its action state starts fresh. Without this, the result
+  // of the previous submission would still be showing — and a second website could not be
+  // added, because the form would open already holding a success.
+  const [session, setSession] = useState(0);
+
+  function handleOpenChange(next: boolean) {
+    if (next) setSession((value) => value + 1);
+    setOpen(next);
+  }
+
+  function handleSuccess(website: CreatedWebsite) {
+    setOpen(false);
+    if (onCreated) {
+      onCreated(website);
+    } else {
+      router.refresh();
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
 
       <DialogContent className="max-w-md">
@@ -83,51 +158,7 @@ export function AddWebsiteDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form action={formAction} className="space-y-5">
-          {state.status === "error" && state.message ? (
-            <Alert variant="destructive" role="alert">
-              <AlertTitle>Could not save</AlertTitle>
-              <AlertDescription>{state.message}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          <Field
-            name="name"
-            label="Name"
-            hint="Only used to identify this website inside Routely."
-            errors={state.fieldErrors?.["name"]}
-          >
-            {(props) => (
-              <Input {...props} placeholder="Acme Store" maxLength={120} autoComplete="off" required />
-            )}
-          </Field>
-
-          <Field
-            name="domain"
-            label="Domain"
-            hint="The domain the tracking snippet will run on. Pasting a full URL is fine."
-            errors={state.fieldErrors?.["domain"]}
-          >
-            {(props) => (
-              <Input
-                {...props}
-                placeholder="acme.com"
-                inputMode="url"
-                autoComplete="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                required
-              />
-            )}
-          </Field>
-
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <SubmitButton pendingLabel="Adding…">Add website</SubmitButton>
-          </div>
-        </form>
+        <AddWebsiteForm key={session} onSuccess={handleSuccess} onCancel={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
   );

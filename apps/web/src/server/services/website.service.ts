@@ -4,6 +4,7 @@ import type { Website } from "@/generated/prisma/client";
 import { Prisma } from "@/server/db";
 import { conflict, notFound } from "@/server/errors";
 import * as eventRepo from "@/server/repositories/event.repository";
+import * as experimentRepo from "@/server/repositories/experiment.repository";
 import * as websiteRepo from "@/server/repositories/website.repository";
 import { parseOrThrow } from "@/server/validate";
 import { createWebsiteSchema, updateWebsiteSchema } from "@/validation/website";
@@ -22,6 +23,37 @@ const PUBLIC_SITE_ID_ATTEMPTS = 3;
 
 export function listWebsites(actorUserId: string): Promise<Website[]> {
   return websiteRepo.listWebsitesForUser(actorUserId);
+}
+
+export interface WebsiteWithStatus {
+  website: Website;
+  /** Whether the snippet has ever reported an event for this website. */
+  pixelDetected: boolean;
+  experiments: { total: number; active: number };
+}
+
+/**
+ * Every website the actor owns, with the two facts the Get started table shows beside each:
+ * whether its pixel has ever reported, and how many experiments it has.
+ *
+ * The experiment counts come from a single grouped query covering all websites at once. The
+ * pixel checks stay one probe per website on purpose: `hasEvents` is a LIMIT 1 against the
+ * `[websiteId, createdAt]` index, which is cheaper than a grouped scan of the events table —
+ * by far the largest here — for the handful of websites an account actually has.
+ */
+export async function listWebsitesWithStatus(actorUserId: string): Promise<WebsiteWithStatus[]> {
+  const [websites, experimentCounts] = await Promise.all([
+    websiteRepo.listWebsitesForUser(actorUserId),
+    experimentRepo.countExperimentsByWebsite(actorUserId),
+  ]);
+
+  const detected = await Promise.all(websites.map((website) => eventRepo.hasEvents(website.id)));
+
+  return websites.map((website, index) => ({
+    website,
+    pixelDetected: detected[index] ?? false,
+    experiments: experimentCounts.get(website.id) ?? { total: 0, active: 0 },
+  }));
 }
 
 /** Number of experiments on a website the actor owns. Used by the delete confirmation. */
@@ -49,6 +81,7 @@ export async function createWebsite(actorUserId: string, input: unknown): Promis
         userId: actorUserId,
         name: data.name,
         domain: data.domain,
+        protocol: data.protocol,
         publicSiteId: websiteRepo.generatePublicSiteId(),
       });
     } catch (error) {
@@ -84,6 +117,20 @@ export async function deleteWebsite(actorUserId: string, websiteId: string): Pro
   if (result.count === 0) {
     throw notFound("That website does not exist.");
   }
+}
+
+/**
+ * Deletes several websites at once, returning how many were actually removed.
+ *
+ * The tenant filter lives in the `deleteMany` itself, so ids the actor does not own simply
+ * match nothing rather than raising — which is what keeps a crafted list of ids from telling
+ * an attacker which of them exist. Unlike the single-website version this does not throw on a
+ * miss: a partial selection is a normal outcome when a row was removed in another tab.
+ */
+export async function deleteWebsites(actorUserId: string, websiteIds: string[]): Promise<number> {
+  if (websiteIds.length === 0) return 0;
+  const result = await websiteRepo.deleteWebsites(websiteIds, actorUserId);
+  return result.count;
 }
 
 /**

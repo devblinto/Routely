@@ -19,6 +19,7 @@ import type {
   WizardWebsite,
 } from "@/components/experiments/wizard/wizard-types";
 import { IDLE, type FormState } from "@/lib/form-state";
+import { siteOrigin } from "@/lib/site-url";
 import { armShares } from "@/lib/traffic";
 
 type StepKey = "website" | "profile" | "audience" | "metrics" | "configuration" | "summary";
@@ -36,9 +37,9 @@ const STEPS: { key: StepKey; label: string }[] = [
 const STEP_FIELDS: Record<StepKey, (keyof WizardValues)[]> = {
   website: ["websiteId"],
   profile: ["name", "description", "controlUrl", "variants"],
-  audience: ["trafficAllocation"],
+  audience: [],
   metrics: ["conversionUrl", "conversionMatchType", "primaryMetric"],
-  configuration: ["controlMatchType"],
+  configuration: ["controlMatchType", "controlWeight", "trafficAllocation"],
   summary: [],
 };
 
@@ -65,8 +66,15 @@ export function ExperimentWizard({
   preselectedWebsiteId?: string;
 }) {
   const [state, formAction, isPending] = useActionState(action, IDLE);
-  const [step, setStep] = useState<StepKey>("website");
-  const [maxStepIndex, setMaxStepIndex] = useState(0);
+  /**
+   * Arriving with a website already chosen — from the websites table's "New experiment" button,
+   * which links to `?websiteId=` — skips straight to Profile. Step 1 is marked complete rather
+   * than hidden, so the choice is still visible and can be changed by clicking back to it.
+   */
+  const startsOnProfile = websites.some((candidate) => candidate.id === preselectedWebsiteId);
+
+  const [step, setStep] = useState<StepKey>(startsOnProfile ? "profile" : "website");
+  const [maxStepIndex, setMaxStepIndex] = useState(startsOnProfile ? 1 : 0);
   const [dialogOpen, setDialogOpen] = useState(false);
   // Lifted out of props so a website created from the wizard's own dialog can be appended and
   // selected immediately, without a round trip back to the server that built this page.
@@ -93,7 +101,9 @@ export function ExperimentWizard({
   function setVariantUrl(index: number, url: string) {
     setValues((previous) => ({
       ...previous,
-      variants: previous.variants.map((variant, i) => (i === index ? { ...variant, url } : variant)),
+      variants: previous.variants.map((variant, i) =>
+        i === index ? { ...variant, url } : variant,
+      ),
     }));
   }
 
@@ -165,7 +175,10 @@ export function ExperimentWizard({
         setDialogOpen(false);
         setStep(target.key);
         setMaxStepIndex((previous) =>
-          Math.max(previous, STEPS.findIndex((item) => item.key === target.key)),
+          Math.max(
+            previous,
+            STEPS.findIndex((item) => item.key === target.key),
+          ),
         );
       }
     }
@@ -193,6 +206,7 @@ export function ExperimentWizard({
   }
 
   const website = websiteList.find((candidate) => candidate.id === values.websiteId);
+  const origin = website ? siteOrigin(website) : undefined;
 
   const shares = armShares({
     controlWeight: values.controlWeight,
@@ -239,6 +253,9 @@ export function ExperimentWizard({
         {/* Lives at form level rather than inside the configuration step: it is a single value
          * with no field of its own, and the step that edits it is often not the visible one. */}
         <input type="hidden" name="controlWeight" value={values.controlWeight} />
+        {/* Edited on the Configuration step as the "Excluded" share, which has no field of its
+         * own — so the value needs carrying into the submission explicitly. */}
+        <input type="hidden" name="trafficAllocation" value={values.trafficAllocation} />
 
         <div hidden={step !== "website"}>
           <WebsiteStep
@@ -258,7 +275,7 @@ export function ExperimentWizard({
             onVariantUrlChange={setVariantUrl}
             onAddVariant={addVariant}
             onRemoveVariant={removeVariant}
-            domain={website?.domain}
+            origin={origin}
             errors={state.fieldErrors}
             onNext={advance}
             onBack={back}
@@ -266,13 +283,7 @@ export function ExperimentWizard({
         </div>
 
         <div hidden={step !== "audience"}>
-          <AudienceStep
-            trafficAllocation={values.trafficAllocation}
-            onChange={(value) => set("trafficAllocation", value)}
-            errors={state.fieldErrors}
-            onNext={advance}
-            onBack={back}
-          />
+          <AudienceStep onNext={advance} onBack={back} />
         </div>
 
         <div hidden={step !== "metrics"}>
@@ -283,7 +294,7 @@ export function ExperimentWizard({
             onChangeText={(value) => set("conversionUrl", value)}
             onChangeMatch={(value) => set("conversionMatchType", value)}
             onChangeMetric={(value) => set("primaryMetric", value)}
-            domain={website?.domain}
+            origin={origin}
             errors={state.fieldErrors}
             onNext={advance}
             onBack={back}

@@ -109,6 +109,12 @@ enum UrlMatchType {
   PREFIX
 }
 
+/// Scheme a website is served over.
+enum SiteProtocol {
+  HTTPS
+  HTTP
+}
+
 /// Which measurement the results page highlights as "currently ahead" for an experiment.
 enum PrimaryMetric {
   CONVERSION_RATE
@@ -137,6 +143,11 @@ model Website {
   name         String
   /// Primary domain, e.g. "acme.com". Used for the Origin soft-check on ingestion.
   domain       String
+  /// Scheme this site is served over. Stored because `domain` is a bare hostname, so nothing
+  /// else records whether the site is http or https — and every URL the UI prefills (the
+  /// install check, experiment URL placeholders) has to guess otherwise. Defaults to https,
+  /// which is right for everything except local development.
+  protocol     SiteProtocol @default(HTTPS)
   /// Public identifier embedded in the install snippet ("rt_…"). An identifier, not a secret:
   /// it is visible in page source by design and grants no access beyond appending events.
   publicSiteId String   @unique

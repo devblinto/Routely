@@ -271,7 +271,7 @@ export function ExperimentForm({
           <button
             type="button"
             onClick={addVariant}
-            className="w-full cursor-pointer rounded-lg border border-dashed border-border/70 py-2.5 text-center text-sm font-medium text-muted-foreground outline-none transition-colors hover:border-primary/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+            className="w-full cursor-pointer rounded-lg border border-dashed border-border/70 py-2.5 text-center text-sm font-medium text-muted-foreground transition-colors outline-none hover:border-primary/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
           >
             <Plus className="mr-1.5 inline size-3.5" aria-hidden />
             Add URL Variant
@@ -352,14 +352,15 @@ export function ExperimentForm({
           onChange={applyDistribution}
         />
         {state.fieldErrors?.["controlWeight"]?.length ? (
-          <p className="text-xs text-destructive">
-            {state.fieldErrors["controlWeight"].join(" ")}
-          </p>
+          <p className="text-xs text-destructive">{state.fieldErrors["controlWeight"].join(" ")}</p>
         ) : null}
 
         <div className="space-y-2">
           <Label htmlFor="edit-primary-metric">Primary metric</Label>
-          <Select value={primaryMetric} onValueChange={(value) => setPrimaryMetric(value as PrimaryMetric)}>
+          <Select
+            value={primaryMetric}
+            onValueChange={(value) => setPrimaryMetric(value as PrimaryMetric)}
+          >
             <SelectTrigger id="edit-primary-metric" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -370,8 +371,8 @@ export function ExperimentForm({
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Every metric is always measured — this only picks which one the results page treats
-            as &ldquo;currently ahead&rdquo;.
+            Every metric is always measured — this only picks which one the results page treats as
+            &ldquo;currently ahead&rdquo;.
           </p>
         </div>
       </div>

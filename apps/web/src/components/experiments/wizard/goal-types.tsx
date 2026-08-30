@@ -56,7 +56,11 @@ const GOAL_GROUPS: { label: string; types: GoalType[] }[] = [
       { name: "Click Link", description: "Track clicks on outbound links", icon: ExternalLink },
       { name: "Form Submit", description: "Track form submissions", icon: Send },
       { name: "Click Text", description: "Track clicks on specific text", icon: Pencil },
-      { name: "Click Element", description: "Track clicks using a CSS selector", icon: MousePointer2 },
+      {
+        name: "Click Element",
+        description: "Track clicks using a CSS selector",
+        icon: MousePointer2,
+      },
       {
         name: "Element Appears",
         description: "Track when an element appears on the page",
@@ -82,13 +86,7 @@ const GOAL_GROUPS: { label: string; types: GoalType[] }[] = [
   },
 ];
 
-function GoalCard({
-  type,
-  selected = false,
-}: {
-  type: GoalType;
-  selected?: boolean;
-}) {
+function GoalCard({ type, selected = false }: { type: GoalType; selected?: boolean }) {
   const Icon = type.icon;
 
   return (

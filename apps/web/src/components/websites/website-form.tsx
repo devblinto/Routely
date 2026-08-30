@@ -8,6 +8,8 @@ import { SubmitButton } from "@/components/common/submit-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DomainField } from "@/components/websites/domain-field";
+import type { SiteProtocol } from "@/generated/prisma/enums";
 import { IDLE, type FormState } from "@/lib/form-state";
 
 /**
@@ -23,6 +25,7 @@ export function WebsiteForm({
   websiteId,
   defaultName = "",
   defaultDomain = "",
+  defaultProtocol = "HTTPS",
   submitLabel,
   pendingLabel,
   cancelHref,
@@ -32,6 +35,7 @@ export function WebsiteForm({
   websiteId?: string;
   defaultName?: string;
   defaultDomain?: string;
+  defaultProtocol?: SiteProtocol;
   submitLabel: string;
   pendingLabel: string;
   cancelHref?: string;
@@ -73,25 +77,11 @@ export function WebsiteForm({
         )}
       </Field>
 
-      <Field
-        name="domain"
-        label="Domain"
-        hint="The domain the tracking snippet will run on. Pasting a full URL is fine — we keep the host."
+      <DomainField
+        defaultProtocol={defaultProtocol}
+        defaultDomain={defaultDomain}
         errors={state.fieldErrors?.["domain"]}
-      >
-        {(props) => (
-          <Input
-            {...props}
-            defaultValue={defaultDomain}
-            placeholder="acme.com"
-            inputMode="url"
-            autoComplete="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            required
-          />
-        )}
-      </Field>
+      />
 
       <div className="flex flex-wrap gap-2 pt-1">
         <SubmitButton pendingLabel={pendingLabel}>{submitLabel}</SubmitButton>

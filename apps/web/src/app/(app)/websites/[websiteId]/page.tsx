@@ -8,13 +8,11 @@ import { ExperimentRow } from "@/components/experiments/experiment-row";
 import { PageHeader } from "@/components/common/page-header";
 import { CopyValue } from "@/components/websites/copy-value";
 import { DeleteWebsiteDialog } from "@/components/websites/delete-website-dialog";
-import { InstallSnippet } from "@/components/websites/install-snippet";
 import { WebsiteForm } from "@/components/websites/website-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { env } from "@/env";
 import { formatDate } from "@/lib/format";
 import { routes } from "@/lib/routes";
 import { deleteWebsiteAction, updateWebsiteAction } from "@/server/actions/website.actions";
@@ -28,10 +26,13 @@ export const metadata: Metadata = { title: "Website" };
 /**
  * Website detail.
  *
- * Ordered by what the reader needs when: identity at the top, then installation (the only
- * thing standing between a new website and useful data), then experiments, then the settings
- * they will rarely touch. Editing and deleting share one card so the page does not read as
- * five equally-weighted panels.
+ * Ordered by what the reader needs when: identity at the top, then this website's experiments,
+ * then the settings they will rarely touch. Editing and deleting share one card so the page
+ * does not read as three equally-weighted panels.
+ *
+ * Snippet installation deliberately lives on Get started rather than here. It was duplicated in
+ * both places, and the Get started copy is the one that can also verify the install — two
+ * versions of the same instructions is exactly how they drift apart.
  */
 export default async function WebsitePage({ params }: { params: Promise<{ websiteId: string }> }) {
   const user = await requireUser();
@@ -102,12 +103,6 @@ export default async function WebsitePage({ params }: { params: Promise<{ websit
         </CardContent>
       </Card>
 
-      <InstallSnippet
-        sdkUrl={env.SDK_URL}
-        publicSiteId={website.publicSiteId}
-        domain={website.domain}
-      />
-
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-lg font-medium">Experiments</h2>
@@ -164,6 +159,7 @@ export default async function WebsitePage({ params }: { params: Promise<{ websit
                 websiteId={website.id}
                 defaultName={website.name}
                 defaultDomain={website.domain}
+                defaultProtocol={website.protocol}
                 submitLabel="Save changes"
                 pendingLabel="Saving…"
               />

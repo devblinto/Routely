@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 
-import type { Prisma, Website } from "@/generated/prisma/client";
+import type { Prisma, SiteProtocol, Website } from "@/generated/prisma/client";
 import { type DbClient, db } from "@/server/db";
 
 /**
@@ -56,7 +56,13 @@ export function findWebsiteByPublicSiteId(
 }
 
 export function createWebsite(
-  data: { userId: string; name: string; domain: string; publicSiteId: string },
+  data: {
+    userId: string;
+    name: string;
+    domain: string;
+    protocol: SiteProtocol;
+    publicSiteId: string;
+  },
   client: DbClient = db,
 ): Promise<Website> {
   return client.website.create({ data });
@@ -83,6 +89,20 @@ export function deleteWebsite(
 ): Promise<Prisma.BatchPayload> {
   return client.website.deleteMany({
     where: { id: websiteId, userId },
+  });
+}
+
+/**
+ * Deletes several websites belonging to one user. As with the single-row version, the tenant
+ * filter participates in the write itself rather than relying on a prior read.
+ */
+export function deleteWebsites(
+  websiteIds: string[],
+  userId: string,
+  client: DbClient = db,
+): Promise<Prisma.BatchPayload> {
+  return client.website.deleteMany({
+    where: { id: { in: websiteIds }, userId },
   });
 }
 

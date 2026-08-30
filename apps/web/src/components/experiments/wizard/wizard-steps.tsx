@@ -105,7 +105,7 @@ export function ProfileStep({
   onVariantUrlChange,
   onAddVariant,
   onRemoveVariant,
-  domain,
+  origin,
   errors,
   onNext,
   onBack,
@@ -118,7 +118,8 @@ export function ProfileStep({
   onVariantUrlChange: (index: number, url: string) => void;
   onAddVariant: () => void;
   onRemoveVariant: (index: number) => void;
-  domain?: string;
+  /** Scheme + host, e.g. `https://acme.com` — used for URL placeholders. */
+  origin?: string;
   errors: FieldErrors;
   onNext: () => void;
   onBack: () => void;
@@ -173,7 +174,7 @@ export function ProfileStep({
             {...props}
             value={values.controlUrl}
             onChange={(event) => onChange("controlUrl", event.target.value)}
-            placeholder={domain ? `https://${domain}/pricing` : "https://example.com/pricing"}
+            placeholder={origin ? `${origin}/pricing` : "https://example.com/pricing"}
             inputMode="url"
             autoComplete="off"
             autoCapitalize="none"
@@ -192,7 +193,7 @@ export function ProfileStep({
             index={index}
             variant={variant}
             removable={values.variants.length > 1}
-            domain={domain}
+            origin={origin}
             onChange={(url) => onVariantUrlChange(index, url)}
             onRemove={() => onRemoveVariant(index)}
           />
@@ -201,7 +202,7 @@ export function ProfileStep({
         <button
           type="button"
           onClick={onAddVariant}
-          className="w-full cursor-pointer rounded-lg border border-dashed border-border/70 py-2.5 text-center text-sm font-medium text-muted-foreground outline-none transition-colors hover:border-primary/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="w-full cursor-pointer rounded-lg border border-dashed border-border/70 py-2.5 text-center text-sm font-medium text-muted-foreground transition-colors outline-none hover:border-primary/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Plus className="mr-1.5 inline size-3.5" aria-hidden />
           Add URL Variant
@@ -228,14 +229,15 @@ function VariantRow({
   index,
   variant,
   removable,
-  domain,
+  origin,
   onChange,
   onRemove,
 }: {
   index: number;
   variant: WizardVariant;
   removable: boolean;
-  domain?: string;
+  /** Scheme + host, e.g. `https://acme.com` — used for URL placeholders. */
+  origin?: string;
   onChange: (url: string) => void;
   onRemove: () => void;
 }) {
@@ -257,8 +259,8 @@ function VariantRow({
               value={variant.url}
               onChange={(event) => onChange(event.target.value)}
               placeholder={
-                domain
-                  ? `https://${domain}/pricing-v${index + 1}`
+                origin
+                  ? `${origin}/pricing-v${index + 1}`
                   : `https://example.com/pricing-v${index + 1}`
               }
               inputMode="url"
@@ -290,61 +292,15 @@ function VariantRow({
 // 3. Target audience
 // ---------------------------------------------------------------------------
 
-export function AudienceStep({
-  trafficAllocation,
-  onChange,
-  errors,
-  onNext,
-  onBack,
-}: {
-  trafficAllocation: number;
-  onChange: (value: number) => void;
-  errors: FieldErrors;
-  onNext: () => void;
-  onBack: () => void;
-}) {
+export function AudienceStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   return (
     <WizardStepCard
       title="Target audience"
-      description="Choose who should see your experiment, and what share of them to include."
+      description="Choose who should see your experiment. The share of traffic it takes is set on the Configuration step."
       onNext={onNext}
       onBack={onBack}
     >
       <AudienceSegments />
-
-      <div className="space-y-5 border-t border-border/70 pt-5">
-        <h3 className="text-sm font-medium">Traffic allocation</h3>
-
-      <Field
-        name="trafficAllocation"
-        label="Percent of visitors included"
-        hint="Independent of the split between arms — this decides who is in the experiment at all, before that split ever applies."
-        errors={errors?.trafficAllocation}
-      >
-        {(props) => (
-          <div className="flex items-center gap-3">
-            <input
-              {...props}
-              type="range"
-              min={1}
-              max={100}
-              value={trafficAllocation}
-              onChange={(event) => onChange(Number(event.target.value))}
-              className="h-2 flex-1 cursor-pointer accent-primary"
-            />
-            <span className="w-14 shrink-0 rounded-md border border-input bg-background px-2 py-1 text-center text-sm tabular-nums">
-              {trafficAllocation}%
-            </span>
-          </div>
-        )}
-      </Field>
-
-        <p className="text-sm text-muted-foreground">
-          {trafficAllocation < 100
-            ? `The remaining ${100 - trafficAllocation}% see the control page untouched — never assigned, redirected or tracked for this experiment.`
-            : "Everyone who lands on the control page is entered into this experiment."}
-        </p>
-      </div>
     </WizardStepCard>
   );
 }
@@ -360,7 +316,7 @@ export function MetricsStep({
   onChangeText,
   onChangeMatch,
   onChangeMetric,
-  domain,
+  origin,
   errors,
   onNext,
   onBack,
@@ -371,7 +327,8 @@ export function MetricsStep({
   onChangeText: (value: string) => void;
   onChangeMatch: (value: WizardValues["conversionMatchType"]) => void;
   onChangeMetric: (value: WizardValues["primaryMetric"]) => void;
-  domain?: string;
+  /** Scheme + host, e.g. `https://acme.com` — used for URL placeholders. */
+  origin?: string;
   errors: FieldErrors;
   onNext: () => void;
   onBack: () => void;
@@ -388,26 +345,26 @@ export function MetricsStep({
       <div className="space-y-5 border-t border-border/70 pt-5">
         <h3 className="text-sm font-medium">Goal page</h3>
 
-      <Field
-        name="conversionUrl"
-        label="Conversion URL"
-        hint="Reaching this page counts as a conversion for whichever version the visitor saw. The snippet must be installed here too."
-        errors={errors?.conversionUrl}
-      >
-        {(props) => (
-          <Input
-            {...props}
-            value={conversionUrl}
-            onChange={(event) => onChangeText(event.target.value)}
-            placeholder={domain ? `https://${domain}/thank-you` : "https://example.com/thank-you"}
-            inputMode="url"
-            autoComplete="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            required
-          />
-        )}
-      </Field>
+        <Field
+          name="conversionUrl"
+          label="Conversion URL"
+          hint="Reaching this page counts as a conversion for whichever version the visitor saw. The snippet must be installed here too."
+          errors={errors?.conversionUrl}
+        >
+          {(props) => (
+            <Input
+              {...props}
+              value={conversionUrl}
+              onChange={(event) => onChangeText(event.target.value)}
+              placeholder={origin ? `${origin}/thank-you` : "https://example.com/thank-you"}
+              inputMode="url"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              required
+            />
+          )}
+        </Field>
 
         <Field
           name="conversionMatchType"

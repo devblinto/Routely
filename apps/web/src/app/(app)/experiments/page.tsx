@@ -4,24 +4,22 @@ import { FlaskConical, Plus } from "lucide-react";
 
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
-import { ExperimentStatusBadge } from "@/components/experiments/status-badge";
-import { LiftBadge } from "@/components/experiments/lift-badge";
+import {
+  ExperimentListHeader,
+  ExperimentListRow,
+} from "@/components/experiments/experiment-list-row";
 import { ListFilters, type StatusTab } from "@/components/experiments/list-filters";
 import { RangePicker } from "@/components/experiments/range-picker";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { parseRangeKey, resolveRange } from "@/lib/date-range";
-import { formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { routes } from "@/lib/routes";
+import { changeExperimentStatusAction } from "@/server/actions/experiment.actions";
 import { requireUser } from "@/server/auth/session";
 import * as analyticsService from "@/server/services/analytics.service";
 import * as experimentService from "@/server/services/experiment.service";
 import type { ExperimentStatus } from "@/generated/prisma/enums";
 
 export const metadata: Metadata = { title: "Experiments" };
-
-/** Below this many assigned visitors, a lift figure is noise — see components/results.tsx. */
-const MIN_VISITORS_FOR_LIFT = 30;
 
 const STATUS_TABS: { key: string; label: string; status?: ExperimentStatus }[] = [
   { key: "all", label: "All" },
@@ -121,107 +119,26 @@ export default async function ExperimentsPage({
             />
           ) : (
             <>
-              {/* A table on wide screens, stacked cards below — the same data either way, since
-                  a horizontally-scrolling table is a poor way to read numbers on a phone. */}
-              <div className="hidden overflow-hidden rounded-xl border border-border/70 md:block">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50 text-muted-foreground">
-                    <tr className="[&>th]:px-4 [&>th]:py-2.5 [&>th]:text-left [&>th]:font-medium">
-                      <th>Experiment</th>
-                      <th>Status</th>
-                      <th className="text-right!">Visitors</th>
-                      <th className="text-right!">Converted</th>
-                      <th className="text-right!">Control</th>
-                      <th className="text-right!">Best variant</th>
-                      <th className="text-right!">Change</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/70">
-                    {experiments.map((experiment) => {
-                      const summary = summaries.get(experiment.id);
-                      const enough = (summary?.assignedVisitors ?? 0) >= MIN_VISITORS_FOR_LIFT * 2;
-
-                      return (
-                        <tr key={experiment.id} className="transition-colors hover:bg-muted/40">
-                          <td className="max-w-0 px-4 py-3">
-                            <Link
-                              href={routes.experiments.detail(experiment.id)}
-                              className="block truncate font-medium hover:underline"
-                            >
-                              {experiment.name}
-                            </Link>
-                            <span className="block truncate text-xs text-muted-foreground">
-                              {experiment.website.domain} · {formatDate(experiment.createdAt)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <ExperimentStatusBadge status={experiment.status} />
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums">
-                            {formatNumber(summary?.assignedVisitors ?? 0)}
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums">
-                            {formatNumber(summary?.conversions ?? 0)}
-                          </td>
-                          <td className="px-4 py-3 text-right text-muted-foreground tabular-nums">
-                            {formatPercent(summary?.controlRate ?? null)}
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums">
-                            {formatPercent(summary?.bestVariantRate ?? null)}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <LiftBadge lift={summary?.lift ?? null} meaningful={enough} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="overflow-hidden rounded-xl border border-border/70">
+                <ExperimentListHeader />
+                <div className="divide-y divide-border/70">
+                  {experiments.map((experiment) => (
+                    <ExperimentListRow
+                      key={experiment.id}
+                      experiment={experiment}
+                      summary={summaries.get(experiment.id)}
+                      statusAction={changeExperimentStatusAction}
+                    />
+                  ))}
+                </div>
               </div>
-
-              <ul className="space-y-3 md:hidden">
-                {experiments.map((experiment) => {
-                  const summary = summaries.get(experiment.id);
-                  const enough = (summary?.assignedVisitors ?? 0) >= MIN_VISITORS_FOR_LIFT * 2;
-
-                  return (
-                    <li key={experiment.id}>
-                      <Card size="sm">
-                        <Link
-                          href={routes.experiments.detail(experiment.id)}
-                          className="block space-y-2 px-(--card-spacing) outline-none"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <span className="min-w-0">
-                              <span className="block truncate font-medium">{experiment.name}</span>
-                              <span className="block truncate text-xs text-muted-foreground">
-                                {experiment.website.domain}
-                              </span>
-                            </span>
-                            <ExperimentStatusBadge status={experiment.status} />
-                          </div>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                            <span>{formatNumber(summary?.assignedVisitors ?? 0)} visitors</span>
-                            <span>{formatNumber(summary?.conversions ?? 0)} converted</span>
-                            <span>
-                              {formatPercent(summary?.controlRate ?? null)} →{" "}
-                              {formatPercent(summary?.bestVariantRate ?? null)}
-                            </span>
-                            <LiftBadge lift={summary?.lift ?? null} meaningful={enough} />
-                          </div>
-                        </Link>
-                      </Card>
-                    </li>
-                  );
-                })}
-              </ul>
             </>
           )}
 
           <p className="text-xs text-muted-foreground">
-            Change is the best-performing variant&rsquo;s conversion rate relative to the
-            control&rsquo;s. It is descriptive arithmetic, not a significance test, and is hidden
-            until an experiment has enough traffic for the comparison to mean anything.
+            Conversion rate is the best-performing arm&rsquo;s, over the selected range. Traffic
+            share is how much of a site&rsquo;s traffic each experiment is set to include. Open an
+            experiment for the per-arm breakdown.
           </p>
         </div>
       )}

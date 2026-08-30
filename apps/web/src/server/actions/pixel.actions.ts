@@ -26,8 +26,7 @@ import * as pixelService from "@/server/services/pixel.service";
  * `AppError` would arrive as `{}` — so a failure is returned as a value rather than raised.
  */
 export type InstallCheckResult =
-  | { ok: true; snippetFound: boolean; wrongSiteId: boolean }
-  | { ok: false; message: string };
+  { ok: true; snippetFound: boolean; wrongSiteId: boolean } | { ok: false; message: string };
 
 /**
  * Checks one page for the snippet, for the wizard's pre-publish dialog.

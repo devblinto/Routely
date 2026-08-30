@@ -127,6 +127,22 @@ export default async function ExperimentPage({
         actions={<ExperimentStatusBadge status={experiment.status} />}
       />
 
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-medium">Results</h2>
+          <RangePicker value={rangeKey} />
+        </div>
+        <ExperimentResults
+          control={stats.control}
+          controlShare={shares.control}
+          variants={variantResults}
+          isEmpty={stats.isEmpty}
+          controlUrl={experiment.controlUrl}
+          primaryMetric={experiment.primaryMetric}
+          isDraft={isDraft}
+        />
+      </section>
+
       <Card>
         <CardHeader>
           <CardTitle>What this test does</CardTitle>
@@ -209,22 +225,6 @@ export default async function ExperimentPage({
           />
         </CardContent>
       </Card>
-
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-medium">Results</h2>
-          <RangePicker value={rangeKey} />
-        </div>
-        <ExperimentResults
-          control={stats.control}
-          controlShare={shares.control}
-          variants={variantResults}
-          isEmpty={stats.isEmpty}
-          controlUrl={experiment.controlUrl}
-          primaryMetric={experiment.primaryMetric}
-          isDraft={isDraft}
-        />
-      </section>
 
       <SharePanel
         experimentId={experiment.id}

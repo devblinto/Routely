@@ -121,7 +121,8 @@ export function decide(
   }
 
   const variantId = variantFor(experiment);
-  const targetVariant = variantId === null ? null : experiment.variants.find((v) => v.id === variantId);
+  const targetVariant =
+    variantId === null ? null : experiment.variants.find((v) => v.id === variantId);
 
   // A non-null variantId that matches nothing in this experiment's own variant list would be
   // a corrupted or stale assignment (never possible from a correctly-behaving caller, since a

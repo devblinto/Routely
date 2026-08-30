@@ -228,7 +228,8 @@ export async function updateExperiment(
     merged.variants.length !== existing.variants.length ||
     merged.variants.some(
       (variant, index) =>
-        variant.id !== existing.variants[index]?.id || variant.url !== existing.variants[index]?.url,
+        variant.id !== existing.variants[index]?.id ||
+        variant.url !== existing.variants[index]?.url,
     );
 
   const variantsChanged =

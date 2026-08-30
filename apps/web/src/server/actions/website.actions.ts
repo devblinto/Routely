@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import type { SiteProtocol } from "@/generated/prisma/enums";
 import { routes } from "@/lib/routes";
 import { type FormState, runAction } from "@/server/actions/types";
 import { requireUser } from "@/server/auth/session";
@@ -27,6 +28,7 @@ export async function createWebsiteAction(
     websiteService.createWebsite(user.id, {
       name: formData.get("name"),
       domain: formData.get("domain"),
+      protocol: formData.get("protocol") ?? undefined,
     }),
   );
 
@@ -40,7 +42,7 @@ export async function createWebsiteAction(
 
 export interface CreateWebsiteInlineState extends FormState {
   /** Present on success, for a caller that needs the created row without navigating away. */
-  website?: { id: string; name: string; domain: string };
+  website?: { id: string; name: string; domain: string; protocol: SiteProtocol };
 }
 
 /**
@@ -58,6 +60,9 @@ export async function createWebsiteInlineAction(
     websiteService.createWebsite(user.id, {
       name: formData.get("name"),
       domain: formData.get("domain"),
+      // Absent means "not specified", which the schema turns into the https default. A null
+      // from `formData.get` would fail the enum instead of taking that default.
+      protocol: formData.get("protocol") ?? undefined,
     }),
   );
 
@@ -67,7 +72,12 @@ export async function createWebsiteInlineAction(
 
   return {
     status: "success",
-    website: { id: result.data.id, name: result.data.name, domain: result.data.domain },
+    website: {
+      id: result.data.id,
+      name: result.data.name,
+      domain: result.data.domain,
+      protocol: result.data.protocol,
+    },
   };
 }
 
@@ -83,6 +93,7 @@ export async function updateWebsiteAction(
       websiteId,
       name: formData.get("name"),
       domain: formData.get("domain"),
+      protocol: formData.get("protocol") ?? undefined,
     }),
   );
 
@@ -93,6 +104,41 @@ export async function updateWebsiteAction(
   revalidatePath(routes.websites.detail(websiteId));
 
   return { status: "success", message: "Website updated." };
+}
+
+/**
+ * Deletes every selected website.
+ *
+ * Ids arrive as repeated `websiteId` fields, and ownership is enforced inside the delete's own
+ * where clause — so an id belonging to someone else contributes nothing rather than erroring,
+ * and the count that comes back reflects only what the actor actually owned.
+ *
+ * Stays on the page rather than redirecting: the table it was triggered from is still the right
+ * place to be afterwards.
+ */
+export async function deleteWebsitesAction(
+  _previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  const websiteIds = formData.getAll("websiteId").map(String).filter(Boolean);
+
+  if (websiteIds.length === 0) {
+    return { status: "error", message: "Select at least one website to delete." };
+  }
+
+  const result = await runAction(() => websiteService.deleteWebsites(user.id, websiteIds));
+
+  if (!result.ok) {
+    return result.state;
+  }
+
+  revalidatePath(routes.getStarted);
+
+  return {
+    status: "success",
+    message: `Deleted ${result.data} website${result.data === 1 ? "" : "s"}.`,
+  };
 }
 
 export async function deleteWebsiteAction(
