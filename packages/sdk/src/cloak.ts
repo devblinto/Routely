@@ -36,12 +36,19 @@ const STYLE_ID = "routely-cloak";
 /**
  * How long the page may stay hidden.
  *
- * Shorter than the 3s config timeout on purpose: if the request is that slow the visitor is
- * better served by the control page than by a blank one, and the redirect will still happen
- * when the answer lands. Mida's snippet uses 2000ms; 1500ms is chosen because the config
- * response is CDN-cached and a normal fetch resolves in a fraction of it.
+ * Much shorter than the 3s config timeout on purpose: if the request is that slow the visitor
+ * is better served by the control page than by a blank one, and the redirect still happens when
+ * the answer lands. Mida's published snippet uses 2000ms.
+ *
+ * 750ms is the deliberate other end of that trade. The config response is CDN-cached with
+ * `s-maxage=60`, so the overwhelming majority of requests are served from an edge node in well
+ * under 100ms and never come near this cap. What the cap actually governs is the bad tail — a
+ * cold start, a slow mobile connection — and there the question is which is worse to show:
+ * a blank page, or the control page briefly. A blank page looks broken, and it looks broken on
+ * exactly the visits that are already going badly. Half a viewer's patience is worth more than
+ * a clean redirect on the slowest 1% of loads.
  */
-export const DEFAULT_CLOAK_MS = 1500;
+export const DEFAULT_CLOAK_MS = 750;
 
 /** Ceiling on the configured value — a typo in a data attribute must not blank a site. */
 const MAX_CLOAK_MS = 4000;

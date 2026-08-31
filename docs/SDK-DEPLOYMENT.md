@@ -311,7 +311,7 @@ Per-site overrides, for debugging one installation without rebuilding:
 | `data-timeout` | `3000` | Config request timeout, in ms |
 | `data-debug` | `false` | Log decisions to the console |
 | `data-cloak` | `true` | Set to `"false"` to disable the anti-flicker cloak |
-| `data-cloak-timeout` | `1500` | Hard ceiling on how long the page may stay hidden, in ms |
+| `data-cloak-timeout` | `750` | Hard ceiling on how long the page may stay hidden, in ms |
 | `data-cloak-background` | `#fff` | Colour shown while hidden — set it on a dark site |
 
 ### The anti-flicker cloak
@@ -356,7 +356,7 @@ Verified against headless Chrome over the DevTools Protocol: probed mid-decision
 is present and painting (`rgb(255, 255, 255)`, `position: fixed`) over a control page whose
 markup has already rendered; on redirect the cloak is never lifted and the visitor goes
 straight to the variant; with no matching experiment it lifts as soon as the config lands; and
-with a config deliberately slower than the cap it lifts itself at 1499 ms with the decision
+with a config deliberately slower than the cap it lifts itself at the cap with the decision
 still pending.
 
 ---

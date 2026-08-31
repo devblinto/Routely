@@ -89,6 +89,12 @@ describe("sanitizeBackground", () => {
 });
 
 describe("clampCloakMs", () => {
+  it("defaults to 750ms", () => {
+    // Pinned deliberately. This is the ceiling on how long a visitor can be shown a blank
+    // page, so it should not drift without someone deciding that it should.
+    expect(DEFAULT_CLOAK_MS).toBe(750);
+  });
+
   it("falls back to the default for missing or nonsensical values", () => {
     expect(clampCloakMs(undefined)).toBe(DEFAULT_CLOAK_MS);
     expect(clampCloakMs(NaN)).toBe(DEFAULT_CLOAK_MS);
