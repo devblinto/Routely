@@ -297,7 +297,7 @@ host page's own box model untouched, so lifting it cannot reflow the page.
 The cloak is applied synchronously, before first paint, and only when the decision actually
 needs the network: a cached configuration is read synchronously, so in practice only the first
 page of a session is ever hidden. It is removed when the decision is made, or after a hard
-1000 ms timeout — the page can never stay hidden if the config request fails. A redirect
+1250 ms timeout — the page can never stay hidden if the config request fails. A redirect
 deliberately keeps it up, because revealing the control page for the duration of the navigation
 is the exact flash the cloak exists to remove.
 
@@ -425,7 +425,7 @@ parts are optional there today and become required in the part that introduces t
    intervals in the MVP.
 6. **Single Control + single Variant** — no multi-variant, no multivariate testing.
 7. **Redirect flicker is mitigated, not eliminated** on slow connections; the cloak times out
-   at 1000 ms in favour of showing the Control page. A configuration request slower than that
+   at 1250 ms in favour of showing the Control page. A configuration request slower than that
    still produces a visible flash, bounded by however much slower it was.
 8. **In-memory rate limiting** (single container). Multi-instance deployment needs a shared
    store.

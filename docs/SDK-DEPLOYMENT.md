@@ -311,7 +311,7 @@ Per-site overrides, for debugging one installation without rebuilding:
 | `data-timeout` | `3000` | Config request timeout, in ms |
 | `data-debug` | `false` | Log decisions to the console |
 | `data-cloak` | `true` | Set to `"false"` to disable the anti-flicker cloak |
-| `data-cloak-timeout` | `1000` | Hard ceiling on how long the page may stay hidden, in ms |
+| `data-cloak-timeout` | `1250` | Hard ceiling on how long the page may stay hidden, in ms |
 | `data-cloak-background` | `#fff` | Colour shown while hidden — set it on a dark site |
 
 ### The anti-flicker cloak

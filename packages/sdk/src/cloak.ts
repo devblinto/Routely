@@ -36,21 +36,30 @@ const STYLE_ID = "routely-cloak";
 /**
  * How long the page may stay hidden.
  *
- * Much shorter than the 3s config timeout on purpose: if the request is that slow the visitor
- * is better served by the control page than by a blank one, and the redirect still happens when
- * the answer lands. Mida's published snippet uses 2000ms.
+ * Deliberately much shorter than the 3s config timeout: if the request is that slow the
+ * visitor is better served by the control page than by a blank one, and the redirect still
+ * happens when the answer lands. Mida's published snippet uses 2000ms.
  *
- * 1000ms is the deliberate other end of that trade. The config response is CDN-cached with
- * `s-maxage=60`, so the overwhelming majority of requests are served from an edge node in well
- * under 100ms and never come near this cap. What the cap actually governs is the bad tail — a
- * cold start, a slow mobile connection — and there the question is which is worse to show:
- * a blank page, or the control page briefly. A blank page looks broken, and it looks broken on
- * exactly the visits that are already going badly. A second is about as long as a visitor will
- * tolerate a blank screen before concluding the site is down, so that is where the line sits:
- * long enough that a merely sluggish request still resolves under cover, short enough that a
- * genuinely stuck one falls back to a working page rather than a broken-looking one.
+ * The value is a judgement call about the bad tail, not the common case. The config response is
+ * CDN-cached with `s-maxage=60`, so the overwhelming majority of loads are served from an edge
+ * node in well under 100ms and never approach this cap at all. What it actually governs is a
+ * cold start or a slow mobile connection, where the only question is which is worse to show:
+ * a blank page, or the control page briefly.
+ *
+ * Both directions cost something real, which is why there is no obviously correct number:
+ *
+ *   Longer  — fewer visitors ever glimpse the control page, but a stuck request holds a blank
+ *             screen for longer, and a blank screen reads as *broken* on exactly the visits
+ *             that are already going badly.
+ *   Shorter — a stuck request degrades quickly to a page that works, at the cost of more
+ *             visible flicker on merely sluggish loads.
+ *
+ * Around a second is the usual resting point: past that a visitor starts to suspect the site is
+ * down rather than slow. Tune it per install with `data-cloak-timeout` rather than reaching for
+ * this constant — a site on slow hosting and a site behind a fast CDN do not want the same
+ * answer, and only the constant is baked into the bundle.
  */
-export const DEFAULT_CLOAK_MS = 1000;
+export const DEFAULT_CLOAK_MS = 1250;
 
 /** Ceiling on the configured value — a typo in a data attribute must not blank a site. */
 const MAX_CLOAK_MS = 4000;
