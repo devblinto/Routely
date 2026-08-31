@@ -289,9 +289,17 @@ persists locally, and strips them from the address bar with `history.replaceStat
 (b) never redirect when the normalized current URL already equals the normalized Variant URL,
 (c) a `sessionStorage` flag `rt.redir.<experimentId>` blocks a second redirect in the session.
 
-**Anti-flicker.** The SDK synchronously sets `document.documentElement.style.opacity = 0` and
-clears it once the decision is made or after a hard 1500 ms timeout — the page can never stay
-hidden if the config request fails.
+**Anti-flicker.** Built in Part 14. The design above (setting `opacity` on the root element)
+was replaced during implementation by a `<style>` element declaring a fixed-position
+`body::after` overlay — it covers the viewport regardless of document height, and it leaves the
+host page's own box model untouched, so lifting it cannot reflow the page.
+
+The cloak is applied synchronously, before first paint, and only when the decision actually
+needs the network: a cached configuration is read synchronously, so in practice only the first
+page of a session is ever hidden. It is removed when the decision is made, or after a hard
+1500 ms timeout — the page can never stay hidden if the config request fails. A redirect
+deliberately keeps it up, because revealing the control page for the duration of the navigation
+is the exact flash the cloak exists to remove.
 
 ### Ingestion endpoint
 
@@ -417,7 +425,8 @@ parts are optional there today and become required in the part that introduces t
    intervals in the MVP.
 6. **Single Control + single Variant** — no multi-variant, no multivariate testing.
 7. **Redirect flicker is mitigated, not eliminated** on slow connections; the cloak times out
-   at 1500 ms in favour of showing the Control page.
+   at 1500 ms in favour of showing the Control page. A configuration request slower than that
+   still produces a visible flash, bounded by however much slower it was.
 8. **In-memory rate limiting** (single container). Multi-instance deployment needs a shared
    store.
 9. **Bot filtering is user-agent based** — cheap and imperfect; no IP reputation or

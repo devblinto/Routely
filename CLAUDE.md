@@ -279,6 +279,7 @@ In `<head>`, no `async`/`defer`, so the redirect decision precedes first paint.
 | `conversion.ts` | Goal matching and once-per-assignment claiming |
 | `engagement.ts` | Visible-time accumulator (`performance.now()`, delta reporting) |
 | `dedupe.ts` | Page-view guard against repeated SDK initialisation |
+| `cloak.ts` | Anti-flicker overlay; hard timeout so it can never fail to lift |
 | `config.ts` / `transport.ts` / `track.ts` | Fetch + cache config; timeouts; `sendBeacon` |
 | `index.ts` | Options, boot sequence, orchestration |
 
@@ -430,7 +431,8 @@ Known limitations are listed at the end of each `docs/*.md`. The most significan
 - **Rate limiting is per-process** — multiple containers multiply the effective limit
 - **Conversions are per-origin** — the assignment lives in `localStorage`, so a goal page on a
   different origin from where the visitor was assigned will not convert
-- **Redirect flicker is not mitigated** — the anti-flicker cloak is designed but not built
+- **Redirect flicker is bounded, not eliminated** — the cloak lifts after 1500 ms, so a
+  config request slower than that still flashes the control page
 - **One redirect per tab session**, not per visitor
 
 ---

@@ -310,6 +310,54 @@ Per-site overrides, for debugging one installation without rebuilding:
 | `data-api` | build-time value | Override the API origin |
 | `data-timeout` | `3000` | Config request timeout, in ms |
 | `data-debug` | `false` | Log decisions to the console |
+| `data-cloak` | `true` | Set to `"false"` to disable the anti-flicker cloak |
+| `data-cloak-timeout` | `1500` | Hard ceiling on how long the page may stay hidden, in ms |
+| `data-cloak-background` | `#fff` | Colour shown while hidden — set it on a dark site |
+
+### The anti-flicker cloak
+
+A redirect test has an unavoidable race. The tag is synchronous, so the SDK runs before the
+page paints — but the *decision* needs the experiment configuration, and that is a network
+request. While it is in flight the browser carries on parsing and paints the control page, so
+a visitor bound for the variant sees the wrong page for as long as the request took. On a
+warm connection that is a flash; on a cold serverless start it was measured at about a second.
+
+The SDK hides the page until the decision is made. Three things about how, because each was a
+choice against a plausible alternative:
+
+**It is inside the bundle, not a second snippet.** Mida ships two scripts: an inline
+anti-flicker block the customer pastes above the tracking tag, plus the tag itself. That is
+forced on them because their tag is `async` — it may not have executed by first paint, so
+something else has to do the hiding. Ours is synchronous by design, so the SDK is already
+running before paint and can hide the page itself. Installation stays one tag, and a customer
+cannot end up with the flicker fix half-installed.
+
+**It does not touch the host page's styles.** The published Mida snippet sets
+`position:relative;overflow:hidden` on `body` and paints a `body::after` overlay positioned
+against it. That mutates the customer's layout, and undoing it can reflow the page visibly at
+exactly the moment you are trying to make things look calm. Routely's overlay is
+`position:fixed`, so it covers the viewport regardless of document height and the host page's
+box model never participates. Every declaration is `!important`, because the customer's own
+stylesheets are linked *after* our element in document order and would otherwise win on equal
+specificity.
+
+**It is skipped when it is not needed.** The configuration is cached in `sessionStorage`, and
+a cache hit is read synchronously — no request, no waiting, nothing to hide. Only a page load
+that actually goes to the network is cloaked, which in practice means the first page of a
+session. Every subsequent page renders with no cloak at all.
+
+The failure mode that matters is a cloak that never lifts, because that is a blank site.
+Four things prevent it: a hard timeout that removes the overlay regardless of what else
+happens; a single exit funnel in `boot()` so every code path reveals; a `try`/`catch` around
+every DOM call, each returning a handle whose `reveal()` is safe to call; and the fact that
+failing to cloak at all degrades to the old behaviour rather than to a broken page.
+
+Verified against headless Chrome over the DevTools Protocol: probed mid-decision, the overlay
+is present and painting (`rgb(255, 255, 255)`, `position: fixed`) over a control page whose
+markup has already rendered; on redirect the cloak is never lifted and the visitor goes
+straight to the variant; with no matching experiment it lifts as soon as the config lands; and
+with a config deliberately slower than the cap it lifts itself at 1499 ms with the decision
+still pending.
 
 ---
 

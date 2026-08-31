@@ -29,8 +29,9 @@ import {
   resolveAssignment,
   resolveAssignmentStores,
 } from "./assignment";
+import { type Cloak, DEFAULT_CLOAK_MS, applyCloak } from "./cloak";
 import { claimConversion, findGoalMatches } from "./conversion";
-import { loadConfig } from "./config";
+import { loadConfig, readCachedConfig } from "./config";
 import { claimPageView } from "./dedupe";
 import {
   type EngagementTimer,
@@ -40,6 +41,7 @@ import {
 } from "./engagement";
 import { SDK_PROTOCOL_VERSION } from "./contract";
 import type { ConfigResponse } from "./contract";
+import { getSessionStorage } from "./env";
 import { type Identity, resolveIdentity } from "./identity";
 import { resolveInclusion } from "./inclusion";
 import { decide, performRedirect } from "./redirect";
@@ -55,6 +57,7 @@ export { resolveInclusion, readInclusion } from "./inclusion";
 export { decide, findExperimentForUrl } from "./redirect";
 export { normalizeUrl, urlMatches, isSameUrl, withHandoff, readHandoff } from "./url";
 export { claimPageView } from "./dedupe";
+export { applyCloak } from "./cloak";
 export { createEngagementTimer, attachEngagement } from "./engagement";
 export { findGoalMatches, claimConversion } from "./conversion";
 
@@ -73,6 +76,15 @@ export interface RoutelyOptions {
   timeoutMs: number;
   /** Log what the SDK is doing. Enabled with `data-debug="true"`. */
   debug: boolean;
+  /**
+   * Hide the page while the redirect decision is pending, so a visitor bound for the variant
+   * never sees the control page first. Disabled with `data-cloak="false"`.
+   */
+  cloak: boolean;
+  /** Hard ceiling on how long the page may stay hidden. `data-cloak-timeout`, milliseconds. */
+  cloakMs: number;
+  /** Colour shown while hidden. `data-cloak-background`. Defaults to white. */
+  cloakBackground: string | undefined;
 }
 
 /** What `boot()` resolves to. Exposed on `window.routely` for debugging an installation. */
@@ -114,12 +126,18 @@ export function readOptions(script: HTMLScriptElement | null): RoutelyOptions | 
   if (!siteId) return null;
 
   const timeout = Number(script?.dataset.timeout);
+  const cloakTimeout = Number(script?.dataset.cloakTimeout);
 
   return {
     siteId,
     apiBase: (script?.dataset.api || __ROUTELY_API_BASE__).replace(/\/+$/, ""),
     timeoutMs: Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_TIMEOUT_MS,
     debug: script?.dataset.debug === "true",
+    // Opt *out*, not in: flicker is the default failure mode of a redirect test, so the
+    // install snippet should not need an extra attribute to avoid it.
+    cloak: script?.dataset.cloak !== "false",
+    cloakMs: Number.isFinite(cloakTimeout) && cloakTimeout > 0 ? cloakTimeout : DEFAULT_CLOAK_MS,
+    cloakBackground: script?.dataset.cloakBackground,
   };
 }
 
@@ -167,7 +185,19 @@ export async function boot(): Promise<RoutelyState | null> {
   // customer's own analytics as though they were campaign parameters.
   cleanUrl(href);
 
-  const config = await loadConfig(options.apiBase, options.siteId, options.timeoutMs);
+  // A fresh cached configuration is read synchronously, so the decision costs no request and
+  // there is no flicker to prevent — cloaking there would hide the page for no reason. Only
+  // the first page of a session normally reaches the network, and only that page is hidden.
+  const cached = readCachedConfig(options.siteId, getSessionStorage());
+  const cloak: Cloak | null =
+    options.cloak && !cached
+      ? applyCloak(typeof document !== "undefined" ? document : undefined, {
+          timeoutMs: options.cloakMs,
+          background: options.cloakBackground,
+        })
+      : null;
+
+  const config = cached ?? (await loadConfig(options.apiBase, options.siteId, options.timeoutMs));
 
   const state: RoutelyState = {
     version: SDK_VERSION,
@@ -184,6 +214,12 @@ export async function boot(): Promise<RoutelyState | null> {
   };
 
   const publish = () => {
+    // Every path out of `boot` funnels through here, so one call covers them all. The single
+    // exception is a redirect: the page is being replaced, and revealing the control page for
+    // the duration of that navigation is the flash this whole mechanism exists to remove.
+    // The cloak's own timeout still lifts it if the navigation stalls.
+    if (state.action !== "redirect") cloak?.reveal();
+
     if (typeof window !== "undefined") window.routely = state;
     return state;
   };
