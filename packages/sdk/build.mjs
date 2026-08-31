@@ -19,7 +19,16 @@ const outFile = resolve(root, "dist/sdk.js");
 const publicDir = resolve(root, "../../apps/web/public/sdk/v1");
 const publicFile = resolve(publicDir, "sdk.js");
 
-const apiBase = process.env.ROUTELY_API_BASE ?? "http://localhost:3000";
+/**
+ * The origin baked into the bundle, which every installed snippet will call.
+ *
+ * Falls back to the Vercel-assigned production URL when building there, so a deployment cannot
+ * ship an SDK that calls `localhost` — the failure mode is silent (the SDK just degrades and
+ * does nothing) and therefore expensive to notice.
+ */
+const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+const apiBase =
+  process.env.ROUTELY_API_BASE ?? (vercelHost ? `https://${vercelHost}` : "http://localhost:3000");
 const watch = process.argv.includes("--watch");
 
 /**

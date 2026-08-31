@@ -13,6 +13,23 @@
 
 import { z } from "zod";
 
+/**
+ * The origin Vercel assigned this project, if we are running there.
+ *
+ * `VERCEL_PROJECT_PRODUCTION_URL` is set by the platform at build and at runtime, and is the
+ * *stable* production hostname rather than the per-deployment one — which is what an OAuth
+ * callback and an install snippet both need. Deriving from it means `AUTH_URL` and
+ * `NEXT_PUBLIC_APP_URL` cannot be left pointing at localhost, which is the single easiest way
+ * to break a Vercel deployment of this app.
+ *
+ * An explicitly configured value always wins, so a custom domain is a matter of setting the
+ * variable and nothing else.
+ */
+function vercelOrigin(): string | undefined {
+  const host = process.env["VERCEL_PROJECT_PRODUCTION_URL"];
+  return host ? `https://${host.replace(/^https?:\/\//, "").replace(/\/+$/, "")}` : undefined;
+}
+
 const serverSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
@@ -35,7 +52,10 @@ const serverSchema = z.object({
    * an explicit origin configured, Auth.js builds OAuth callback URLs from it rather than
    * from an attacker-controllable Host header.
    */
-  AUTH_URL: z.url().optional(),
+  AUTH_URL: z
+    .url()
+    .optional()
+    .default(() => vercelOrigin() as string),
 
   /** Google OAuth client credentials. Required in production. */
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
@@ -53,7 +73,7 @@ const serverSchema = z.object({
 
 const clientSchema = z.object({
   /** Public origin of the dashboard. Used for absolute links and install snippets. */
-  NEXT_PUBLIC_APP_URL: z.url().default("http://localhost:3000"),
+  NEXT_PUBLIC_APP_URL: z.url().default(() => vercelOrigin() ?? "http://localhost:3000"),
 
   /**
    * Absolute URL of the tracking SDK bundle, as it appears in the install snippet customers
@@ -76,7 +96,9 @@ const clientSchema = z.object({
  * literal property accesses, so they must be listed explicitly rather than spread.
  */
 const clientRuntime = {
-  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  // `undefined` lets the schema default apply. On Vercel that is the deployment's own origin,
+  // so a value left over from a local .env cannot leak into production snippets.
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || undefined,
   NEXT_PUBLIC_SDK_URL: process.env.NEXT_PUBLIC_SDK_URL,
 };
 
