@@ -56,6 +56,29 @@ migrations will run against it fine.
 
 ---
 
+## 2b. If you deploy with the `vercel` CLI, read this first
+
+The CLI uploads your working directory, not your git tree. It honours `.vercelignore`, and
+falls back to the **root** `.gitignore` when that file is absent — but it does not reliably
+honour *nested* `.gitignore` files.
+
+`apps/web/.env` is ignored by `apps/web/.gitignore`, so on a first attempt without a
+`.vercelignore` it was uploaded: the build read its `localhost:5432` connection string and
+failed with `P1001: Can't reach database server`, and the real `AUTH_SECRET` and Google client
+secret went to the build machine.
+
+The repo now has a `.vercelignore` that excludes every env file at every depth. **Do not remove
+it**, and if you add another `.env` somewhere, check it is covered:
+
+```bash
+vercel build --debug 2>&1 | grep -i '\.env'   # should list nothing but .env.example
+```
+
+Deploying through the **GitHub integration** instead avoids this entirely — it builds from the
+git tree, which never contained the file.
+
+---
+
 ## 3. Import the project
 
 1. Push to GitHub — done: `github.com/devblinto/Routely`.

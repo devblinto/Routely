@@ -1,0 +1,32 @@
+# What the Vercel CLI must not upload.
+#
+# The CLI falls back to the *root* .gitignore when this file is absent, and does not reliably
+# honour nested ones — so `apps/web/.env`, ignored only by `apps/web/.gitignore`, was uploaded
+# on the first attempt. Its localhost DATABASE_URL then became the build's datasource. Every
+# env file is therefore listed explicitly here, at every depth.
+#
+# Vercel supplies real configuration through its own environment variables; nothing in this
+# list is needed to build.
+
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Reinstalled and regenerated on the build machine.
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+apps/web/src/generated
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Local tooling and history, of no use to a build.
+.git
+.claude
+.vercel
