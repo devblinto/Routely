@@ -431,7 +431,7 @@ Known limitations are listed at the end of each `docs/*.md`. The most significan
 - **Rate limiting is per-process** — multiple containers multiply the effective limit
 - **Conversions are per-origin** — the assignment lives in `localStorage`, so a goal page on a
   different origin from where the visitor was assigned will not convert
-- **Redirect flicker is bounded, not eliminated** — the cloak lifts after 750 ms, so a
+- **Redirect flicker is bounded, not eliminated** — the cloak lifts after 1000 ms, so a
   config request slower than that still flashes the control page
 - **One redirect per tab session**, not per visitor
 

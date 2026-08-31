@@ -40,15 +40,17 @@ const STYLE_ID = "routely-cloak";
  * is better served by the control page than by a blank one, and the redirect still happens when
  * the answer lands. Mida's published snippet uses 2000ms.
  *
- * 750ms is the deliberate other end of that trade. The config response is CDN-cached with
+ * 1000ms is the deliberate other end of that trade. The config response is CDN-cached with
  * `s-maxage=60`, so the overwhelming majority of requests are served from an edge node in well
  * under 100ms and never come near this cap. What the cap actually governs is the bad tail — a
  * cold start, a slow mobile connection — and there the question is which is worse to show:
  * a blank page, or the control page briefly. A blank page looks broken, and it looks broken on
- * exactly the visits that are already going badly. Half a viewer's patience is worth more than
- * a clean redirect on the slowest 1% of loads.
+ * exactly the visits that are already going badly. A second is about as long as a visitor will
+ * tolerate a blank screen before concluding the site is down, so that is where the line sits:
+ * long enough that a merely sluggish request still resolves under cover, short enough that a
+ * genuinely stuck one falls back to a working page rather than a broken-looking one.
  */
-export const DEFAULT_CLOAK_MS = 750;
+export const DEFAULT_CLOAK_MS = 1000;
 
 /** Ceiling on the configured value — a typo in a data attribute must not blank a site. */
 const MAX_CLOAK_MS = 4000;
