@@ -131,7 +131,7 @@ export function ProfileStep({
       onNext={onNext}
       onBack={onBack}
     >
-      <Field name="name" label="Experiment name" errors={errors?.name}>
+      <Field name="name" label="Experiment name" errors={errors?.name} required>
         {(props) => (
           <Input
             {...props}
@@ -168,6 +168,7 @@ export function ProfileStep({
         label="Control URL"
         hint="The page visitors already land on. They stay here."
         errors={errors?.controlUrl}
+        required
       >
         {(props) => (
           <Input
@@ -194,6 +195,7 @@ export function ProfileStep({
             variant={variant}
             removable={values.variants.length > 1}
             origin={origin}
+            errors={errors?.[`variants.${index}`]}
             onChange={(url) => onVariantUrlChange(index, url)}
             onRemove={() => onRemoveVariant(index)}
           />
@@ -230,6 +232,7 @@ function VariantRow({
   variant,
   removable,
   origin,
+  errors,
   onChange,
   onRemove,
 }: {
@@ -238,6 +241,8 @@ function VariantRow({
   removable: boolean;
   /** Scheme + host, e.g. `https://acme.com` — used for URL placeholders. */
   origin?: string;
+  /** Blank-field message for this row alone; see `requiredErrors` in the wizard. */
+  errors?: string[];
   onChange: (url: string) => void;
   onRemove: () => void;
 }) {
@@ -252,6 +257,8 @@ function VariantRow({
           id={`field-variant-${index}`}
           label={`Variant ${index + 1} URL`}
           hint={index === 0 ? "The alternative page. Visitors are redirected here." : undefined}
+          errors={errors}
+          required
         >
           {(props) => (
             <Input
@@ -350,6 +357,7 @@ export function MetricsStep({
           label="Conversion URL"
           hint="Reaching this page counts as a conversion for whichever version the visitor saw. The snippet must be installed here too."
           errors={errors?.conversionUrl}
+          required
         >
           {(props) => (
             <Input

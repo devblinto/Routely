@@ -18,6 +18,7 @@ export function Field({
   children,
   className,
   id: idOverride,
+  required = false,
 }: {
   name: string;
   label: string;
@@ -34,6 +35,15 @@ export function Field({
   /** Overrides the derived `field-${name}` id — needed when the same `name` repeats, as with a
    * dynamic list of same-named inputs (e.g. several "variantUrl" rows). */
   id?: string;
+  /**
+   * Marks the field as required in the label.
+   *
+   * Only the visual mark lives here — the input still carries its own `required`, which is
+   * what assistive technology announces and what the browser enforces. Duplicating that as
+   * `aria-required` on the label would make a screen reader say it twice, so the asterisk is
+   * `aria-hidden` and exists for sighted users alone.
+   */
+  required?: boolean;
 }) {
   const id = idOverride ?? `field-${name}`;
   const hintId = hint ? `${id}-hint` : undefined;
@@ -42,7 +52,14 @@ export function Field({
 
   return (
     <div className={cn("space-y-2", className)}>
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id}>
+        {label}
+        {required ? (
+          <span aria-hidden className="text-destructive">
+            *
+          </span>
+        ) : null}
+      </Label>
 
       {children({
         id,

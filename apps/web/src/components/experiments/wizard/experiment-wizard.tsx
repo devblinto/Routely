@@ -12,6 +12,12 @@ import {
 import type { DistributionArm } from "@/components/experiments/traffic-distribution";
 import { WizardStepper } from "@/components/experiments/wizard/wizard-stepper";
 import { SummaryStep } from "@/components/experiments/wizard/wizard-summary";
+import {
+  type FieldErrors,
+  firstIncompleteStep,
+  hasErrors,
+  requiredFieldErrors,
+} from "@/lib/wizard-required";
 import { NavbarSlot } from "@/components/layout/navbar-slot";
 import type {
   WizardActiveExperiment,
@@ -44,6 +50,9 @@ const STEP_FIELDS: Record<StepKey, (keyof WizardValues)[]> = {
 };
 
 const FORM_ID = "experiment-wizard-form";
+
+/** Step keys in wizard order, for the "which step is still incomplete" search. */
+const STEP_ORDER = STEPS.map((item) => item.key);
 
 /**
  * The multi-step experiment creation flow.
@@ -79,6 +88,12 @@ export function ExperimentWizard({
   // Lifted out of props so a website created from the wizard's own dialog can be appended and
   // selected immediately, without a round trip back to the server that built this page.
   const [websiteList, setWebsiteList] = useState(websites);
+  /**
+   * Blank-required-field messages raised in the browser. Kept separate from the server's
+   * `fieldErrors` so a fresh submit response replaces the server's half without resurrecting a
+   * stale client message, and so clearing one never clears the other.
+   */
+  const [clientErrors, setClientErrors] = useState<FieldErrors>({});
 
   const [values, setValues] = useState<WizardValues>({
     websiteId: preselectedWebsiteId ?? websites[0]?.id ?? "",
@@ -184,6 +199,25 @@ export function ExperimentWizard({
     }
   }
 
+  /**
+   * Required fields, checked in the browser before a step is allowed to advance.
+   *
+   * The rules themselves live in `lib/wizard-required.ts` — pure, and unit-tested without a
+   * DOM. The server schema is still the authority on validity; this only checks presence, and
+   * exists for the feedback moment: "Continue" is a `type="button"`, so it never triggers the
+   * browser's own constraint validation, and without this a customer could walk an empty form
+   * all the way to Summary and only then be told.
+   *
+   * It also removes a worse failure. Steps that are not current stay mounted and are hidden
+   * with the `hidden` attribute so their inputs still submit. A `required` input inside a
+   * hidden element cannot be focused, so the browser refuses the submission and reports it to
+   * the console rather than to the page — the form would simply appear to do nothing. Gating
+   * each step means a blank required field can no longer reach that point.
+   */
+  function requiredErrors(target: StepKey): FieldErrors {
+    return requiredFieldErrors(target, values);
+  }
+
   function goTo(next: StepKey) {
     const nextIndex = STEPS.findIndex((item) => item.key === next);
     if (nextIndex > maxStepIndex) return;
@@ -191,9 +225,42 @@ export function ExperimentWizard({
   }
 
   function advance() {
+    const blocking = requiredErrors(step);
+
+    if (hasErrors(blocking)) {
+      setClientErrors(blocking);
+      return;
+    }
+
+    setClientErrors({});
     const nextIndex = Math.min(stepIndex + 1, STEPS.length - 1);
     setMaxStepIndex((previous) => Math.max(previous, nextIndex));
     setStep(STEPS[nextIndex]!.key);
+  }
+
+  /**
+   * Opening the review dialog is the last gate before submission, so it is where a blank
+   * required field on an *earlier* step has to be caught.
+   *
+   * Reachable despite the per-step checks: the stepper allows jumping back to any visited
+   * step, so a customer can clear a filled field and then skip forward again. Rather than
+   * opening a review of an experiment that cannot be created, this sends them to the step that
+   * needs attention with the message already showing.
+   */
+  function openReview(open: boolean) {
+    if (open) {
+      const incomplete = firstIncompleteStep(STEP_ORDER, values);
+
+      if (incomplete) {
+        setClientErrors(requiredErrors(incomplete));
+        setStep(incomplete);
+        return;
+      }
+
+      setClientErrors({});
+    }
+
+    setDialogOpen(open);
   }
 
   function back() {
@@ -226,6 +293,10 @@ export function ExperimentWizard({
     ],
     excluded: shares.excluded,
   };
+
+  // The client's blank-field messages take precedence: they describe what is on screen right
+  // now, whereas a server error refers to the payload of an earlier submit.
+  const fieldErrors: FieldErrors = { ...state.fieldErrors, ...clientErrors };
 
   const stepper = (
     <WizardStepper
@@ -263,7 +334,7 @@ export function ExperimentWizard({
             websiteId={values.websiteId}
             onSelect={(id) => set("websiteId", id)}
             onCreate={handleWebsiteCreated}
-            errors={state.fieldErrors}
+            errors={fieldErrors}
             onNext={advance}
           />
         </div>
@@ -276,7 +347,7 @@ export function ExperimentWizard({
             onAddVariant={addVariant}
             onRemoveVariant={removeVariant}
             origin={origin}
-            errors={state.fieldErrors}
+            errors={fieldErrors}
             onNext={advance}
             onBack={back}
           />
@@ -295,7 +366,7 @@ export function ExperimentWizard({
             onChangeMatch={(value) => set("conversionMatchType", value)}
             onChangeMetric={(value) => set("primaryMetric", value)}
             origin={origin}
-            errors={state.fieldErrors}
+            errors={fieldErrors}
             onNext={advance}
             onBack={back}
           />
@@ -307,7 +378,7 @@ export function ExperimentWizard({
             distribution={distribution}
             onChangeMatch={(value) => set("controlMatchType", value)}
             onChangeDistribution={applyDistribution}
-            errors={state.fieldErrors}
+            errors={fieldErrors}
             onNext={advance}
             onBack={back}
           />
@@ -322,7 +393,7 @@ export function ExperimentWizard({
             isPending={isPending}
             state={state}
             dialogOpen={dialogOpen}
-            onDialogOpenChange={setDialogOpen}
+            onDialogOpenChange={openReview}
             onBack={back}
           />
         </div>
