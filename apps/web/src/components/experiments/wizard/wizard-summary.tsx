@@ -48,7 +48,7 @@ type InstallState =
  * form, not a second gate, so it doesn't block "Acknowledge & create" for now.
  *
  * Script installation is deliberately not checked here for now — a draft doesn't need the pixel
- * verified yet, and re-adding that check later just means passing `pixelDetected` back in.
+ * verified yet, and re-adding that check later just means passing `receivingData` back in.
  */
 function buildChecks(
   values: WizardValues,

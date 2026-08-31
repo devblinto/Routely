@@ -30,7 +30,7 @@ import type { WebsiteWithStatus } from "@/server/services/website.service";
  *
  * Replaces a row of selector chips that scoped the whole page to one website at a time. With
  * more than two or three websites that shape hid the thing people come here to check — which
- * sites are live and which still need the snippet — behind a click each.
+ * sites are reporting and which are quiet — behind a click each.
  */
 
 /**
@@ -78,7 +78,7 @@ function WebsiteRow({
   sdkUrl: string;
   verifyAction: (state: FormState, formData: FormData) => Promise<FormState>;
 }) {
-  const { website, pixelDetected, experiments } = entry;
+  const { website, receivingData, experiments } = entry;
 
   return (
     <div
@@ -123,20 +123,22 @@ function WebsiteRow({
         <span
           className={cn(
             "inline-flex items-center gap-1.5 text-sm font-medium",
-            pixelDetected
+            receivingData
               ? "text-emerald-700 dark:text-emerald-400"
               : "text-amber-700 dark:text-amber-400",
           )}
         >
-          {pixelDetected ? (
+          {receivingData ? (
             <CheckCircle2 className="size-4 shrink-0" aria-hidden />
           ) : (
             <CircleAlert className="size-4 shrink-0" aria-hidden />
           )}
-          {pixelDetected ? "Pixel detected" : "Pixel not detected"}
+          {receivingData ? "Receiving data" : "No data yet"}
         </span>
         <span className="mt-0.5 block text-xs text-muted-foreground">
-          {pixelDetected ? "Receiving tracking data" : "Install the snippet to start recording"}
+          {receivingData
+            ? "Tracking data is arriving"
+            : "Arrives once an experiment is running here"}
         </span>
       </div>
 
@@ -161,8 +163,8 @@ function WebsiteRow({
           website={website}
           sdkUrl={sdkUrl}
           verifyAction={verifyAction}
-          triggerLabel={pixelDetected ? "Re-check pixel" : "Set up pixel"}
-          triggerVariant={pixelDetected ? "outline" : "default"}
+          triggerLabel={receivingData ? "Re-check pixel" : "Set up pixel"}
+          triggerVariant={receivingData ? "outline" : "default"}
           triggerClassName="w-full"
         />
       </div>
@@ -293,7 +295,9 @@ export function WebsitesTable({
   const allSelected = entries.length > 0 && selectedEntries.length === entries.length;
   const someSelected = selectedEntries.length > 0 && !allSelected;
 
-  const pending = entries.filter((entry) => !entry.pixelDetected).length;
+  // Websites that have never reported. Not necessarily missing the snippet — a site with no
+  // running experiment reports nothing, which is normal rather than a fault.
+  const quiet = entries.filter((entry) => !entry.receivingData).length;
 
   function toggle(websiteId: string, selected: boolean) {
     setSelectedIds((previous) =>
@@ -309,9 +313,9 @@ export function WebsitesTable({
 
         {selectedEntries.length > 0 ? (
           <span className="text-xs text-muted-foreground">{selectedEntries.length} selected</span>
-        ) : pending > 0 ? (
+        ) : quiet > 0 ? (
           <span className="text-xs text-amber-700 dark:text-amber-400">
-            {pending} still {pending === 1 ? "needs" : "need"} the snippet
+            {quiet} not reporting yet
           </span>
         ) : null}
 

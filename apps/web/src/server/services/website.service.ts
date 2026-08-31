@@ -28,7 +28,8 @@ export function listWebsites(actorUserId: string): Promise<Website[]> {
 export interface WebsiteWithStatus {
   website: Website;
   /** Whether the snippet has ever reported an event for this website. */
-  pixelDetected: boolean;
+  /** True once tracking data has arrived — not whether the snippet is installed. */
+  receivingData: boolean;
   experiments: { total: number; active: number };
 }
 
@@ -51,7 +52,7 @@ export async function listWebsitesWithStatus(actorUserId: string): Promise<Websi
 
   return websites.map((website, index) => ({
     website,
-    pixelDetected: detected[index] ?? false,
+    receivingData: detected[index] ?? false,
     experiments: experimentCounts.get(website.id) ?? { total: 0, active: 0 },
   }));
 }
@@ -150,11 +151,17 @@ export async function rotatePublicSiteId(actorUserId: string, websiteId: string)
 /**
  * Whether this website's tracking snippet has reported at least one event.
  *
- * This is the "pixel detected" state shown on the Get started guide and the dashboard: it has
- * no separate stored flag, so it can never disagree with whether the snippet is actually
- * running.
+ * **This is not the same as "the snippet is installed."** The SDK only reports events once an
+ * active experiment matches a page a visitor is actually viewing, so a correctly installed
+ * snippet reports nothing until a test is running — the normal state for a website that was
+ * just set up. Calling that "pixel not detected" is what let the Get started guide say
+ * "You're all set" while the website list said the opposite, both truthfully.
+ *
+ * Whether the snippet is *present* is a different question, answered by fetching the page —
+ * see `pixel.service.verifyInstallation`. Neither is stored as a flag, so neither can go stale
+ * against a snippet the customer later removed.
  */
-export async function isPixelDetected(actorUserId: string, websiteId: string): Promise<boolean> {
+export async function isReceivingData(actorUserId: string, websiteId: string): Promise<boolean> {
   await getWebsite(actorUserId, websiteId);
   return eventRepo.hasEvents(websiteId);
 }

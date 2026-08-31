@@ -8,25 +8,33 @@ const PILL_CLASSES =
   "h-auto gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold [&>svg]:size-4!";
 
 /**
- * Whether this website's tracking pixel has fired.
+ * Whether tracking data has arrived for this website.
  *
- * Rendered plain on the Get started guide, where the customer is already looking at how to
- * fix it. Pass `href` to make it a link instead — used elsewhere as a shortcut back to that
- * guide.
+ * Deliberately not phrased as "pixel detected": no data is the normal state for a correctly
+ * installed snippet on a website with no running experiment, and saying the pixel is missing
+ * would contradict the install check that just passed.
+ *
+ * Pass `href` to make it a link — used as a shortcut back to the Get started guide.
  */
-export function PixelStatusBadge({ detected, href }: { detected: boolean; href?: string }) {
+export function PixelStatusBadge({
+  receivingData,
+  href,
+}: {
+  receivingData: boolean;
+  href?: string;
+}) {
   const badge = (
     <Badge
       variant="outline"
       className={cn(
         PILL_CLASSES,
-        detected
+        receivingData
           ? "border-emerald-300/70 bg-emerald-100 text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-300"
           : "border-amber-300/70 bg-amber-100 text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-300",
       )}
     >
-      {detected ? <CheckCircle2 aria-hidden /> : <AlertCircle aria-hidden />}
-      {detected ? "Pixel detected" : "Pixel not detected"}
+      {receivingData ? <CheckCircle2 aria-hidden /> : <AlertCircle aria-hidden />}
+      {receivingData ? "Receiving data" : "No data yet"}
     </Badge>
   );
 
