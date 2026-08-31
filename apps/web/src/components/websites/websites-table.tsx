@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IDLE, type FormState } from "@/lib/form-state";
 import { routes } from "@/lib/routes";
+import { PIXEL_STATUS } from "@/lib/pixel-status";
 import { cn } from "@/lib/utils";
 import type { WebsiteWithStatus } from "@/server/services/website.service";
 
@@ -78,7 +79,8 @@ function WebsiteRow({
   sdkUrl: string;
   verifyAction: (state: FormState, formData: FormData) => Promise<FormState>;
 }) {
-  const { website, receivingData, experiments } = entry;
+  const { website, pixelStatus, experiments } = entry;
+  const status = PIXEL_STATUS[pixelStatus];
 
   return (
     <div
@@ -123,23 +125,19 @@ function WebsiteRow({
         <span
           className={cn(
             "inline-flex items-center gap-1.5 text-sm font-medium",
-            receivingData
+            status.positive
               ? "text-emerald-700 dark:text-emerald-400"
               : "text-amber-700 dark:text-amber-400",
           )}
         >
-          {receivingData ? (
+          {status.positive ? (
             <CheckCircle2 className="size-4 shrink-0" aria-hidden />
           ) : (
             <CircleAlert className="size-4 shrink-0" aria-hidden />
           )}
-          {receivingData ? "Receiving data" : "No data yet"}
+          {status.label}
         </span>
-        <span className="mt-0.5 block text-xs text-muted-foreground">
-          {receivingData
-            ? "Tracking data is arriving"
-            : "Arrives once an experiment is running here"}
-        </span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">{status.hint}</span>
       </div>
 
       <div className="col-start-2 min-w-0 sm:col-start-auto">
@@ -163,8 +161,9 @@ function WebsiteRow({
           website={website}
           sdkUrl={sdkUrl}
           verifyAction={verifyAction}
-          triggerLabel={receivingData ? "Re-check pixel" : "Set up pixel"}
-          triggerVariant={receivingData ? "outline" : "default"}
+          triggerLabel={pixelStatus === "unknown" ? "Set up pixel" : "Re-check pixel"}
+          triggerVariant={pixelStatus === "unknown" ? "default" : "outline"}
+          alreadySetUp={pixelStatus !== "unknown"}
           triggerClassName="w-full"
         />
       </div>
@@ -295,9 +294,9 @@ export function WebsitesTable({
   const allSelected = entries.length > 0 && selectedEntries.length === entries.length;
   const someSelected = selectedEntries.length > 0 && !allSelected;
 
-  // Websites that have never reported. Not necessarily missing the snippet — a site with no
-  // running experiment reports nothing, which is normal rather than a fault.
-  const quiet = entries.filter((entry) => !entry.receivingData).length;
+  // Only websites where nothing is known yet. A verified site awaiting its first experiment is
+  // set up correctly and must not be counted as outstanding work.
+  const quiet = entries.filter((entry) => entry.pixelStatus === "unknown").length;
 
   function toggle(websiteId: string, selected: boolean) {
     setSelectedIds((previous) =>
@@ -315,7 +314,7 @@ export function WebsitesTable({
           <span className="text-xs text-muted-foreground">{selectedEntries.length} selected</span>
         ) : quiet > 0 ? (
           <span className="text-xs text-amber-700 dark:text-amber-400">
-            {quiet} not reporting yet
+            {quiet} still {quiet === 1 ? "needs" : "need"} setup
           </span>
         ) : null}
 

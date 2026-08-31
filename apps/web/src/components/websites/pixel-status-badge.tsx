@@ -2,39 +2,35 @@ import Link from "next/link";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { PIXEL_STATUS, type PixelStatus } from "@/lib/pixel-status";
 import { cn } from "@/lib/utils";
 
 const PILL_CLASSES =
   "h-auto gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold [&>svg]:size-4!";
 
 /**
- * Whether tracking data has arrived for this website.
+ * A website's tracking status.
  *
- * Deliberately not phrased as "pixel detected": no data is the normal state for a correctly
- * installed snippet on a website with no running experiment, and saying the pixel is missing
- * would contradict the install check that just passed.
+ * Wording and tone come from the shared `PIXEL_STATUS` table, so this can never disagree with
+ * the same status rendered elsewhere — which is the bug this component previously had.
  *
  * Pass `href` to make it a link — used as a shortcut back to the Get started guide.
  */
-export function PixelStatusBadge({
-  receivingData,
-  href,
-}: {
-  receivingData: boolean;
-  href?: string;
-}) {
+export function PixelStatusBadge({ status, href }: { status: PixelStatus; href?: string }) {
+  const { label, positive } = PIXEL_STATUS[status];
+
   const badge = (
     <Badge
       variant="outline"
       className={cn(
         PILL_CLASSES,
-        receivingData
+        positive
           ? "border-emerald-300/70 bg-emerald-100 text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-300"
           : "border-amber-300/70 bg-amber-100 text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-300",
       )}
     >
-      {receivingData ? <CheckCircle2 aria-hidden /> : <AlertCircle aria-hidden />}
-      {receivingData ? "Receiving data" : "No data yet"}
+      {positive ? <CheckCircle2 aria-hidden /> : <AlertCircle aria-hidden />}
+      {label}
     </Badge>
   );
 

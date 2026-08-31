@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Website } from "@/generated/prisma/client";
+import { type PixelStatus, resolvePixelStatus } from "@/lib/pixel-status";
 import { Prisma } from "@/server/db";
 import { conflict, notFound } from "@/server/errors";
 import * as eventRepo from "@/server/repositories/event.repository";
@@ -25,9 +26,11 @@ export function listWebsites(actorUserId: string): Promise<Website[]> {
   return websiteRepo.listWebsitesForUser(actorUserId);
 }
 
+export type { PixelStatus } from "@/lib/pixel-status";
+
 export interface WebsiteWithStatus {
   website: Website;
-  /** Whether the snippet has ever reported an event for this website. */
+  pixelStatus: PixelStatus;
   /** True once tracking data has arrived — not whether the snippet is installed. */
   receivingData: boolean;
   experiments: { total: number; active: number };
@@ -50,11 +53,16 @@ export async function listWebsitesWithStatus(actorUserId: string): Promise<Websi
 
   const detected = await Promise.all(websites.map((website) => eventRepo.hasEvents(website.id)));
 
-  return websites.map((website, index) => ({
-    website,
-    receivingData: detected[index] ?? false,
-    experiments: experimentCounts.get(website.id) ?? { total: 0, active: 0 },
-  }));
+  return websites.map((website, index) => {
+    const receivingData = detected[index] ?? false;
+
+    return {
+      website,
+      receivingData,
+      pixelStatus: resolvePixelStatus(receivingData, website.pixelVerifiedAt),
+      experiments: experimentCounts.get(website.id) ?? { total: 0, active: 0 },
+    };
+  });
 }
 
 /** Number of experiments on a website the actor owns. Used by the delete confirmation. */

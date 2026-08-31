@@ -198,6 +198,14 @@ export async function verifyInstallation(
   // the snippet was copied from a different website in the same account.
   const wrongSiteId = !snippetFound && /data-site-id\s*=\s*["']rt_/i.test(html);
 
+  // Recorded so the answer survives the dialog being closed. Only a success is written: a
+  // failed check may mean the snippet is missing, but it may equally mean the page was slow,
+  // behind a login, or cached — none of which is evidence that a previously confirmed
+  // installation has gone away, so a failure must not erase one.
+  if (snippetFound) {
+    await websiteRepo.markPixelVerified(website.id, actorUserId, new Date());
+  }
+
   return {
     snippetFound,
     wrongSiteId,

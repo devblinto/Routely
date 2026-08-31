@@ -82,6 +82,24 @@ export function updateWebsite(
   });
 }
 
+/**
+ * Records that the snippet was seen on this website's pages.
+ *
+ * Scoped by owner like every other write here, so a websiteId from a form body cannot stamp
+ * somebody else's record.
+ */
+export function markPixelVerified(
+  websiteId: string,
+  userId: string,
+  at: Date,
+  client: DbClient = db,
+): Promise<Prisma.BatchPayload> {
+  return client.website.updateMany({
+    where: { id: websiteId, userId },
+    data: { pixelVerifiedAt: at },
+  });
+}
+
 export function deleteWebsite(
   websiteId: string,
   userId: string,

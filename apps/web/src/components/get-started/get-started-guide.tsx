@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import Link from "next/link";
 import { ArrowLeft, Check } from "lucide-react";
 
 import { PlatformGrid } from "@/components/get-started/platform-grid";
@@ -17,7 +16,6 @@ import {
 } from "@/components/websites/wordpress-install-guide";
 import { IDLE, type FormState } from "@/lib/form-state";
 import type { SiteProtocol } from "@/generated/prisma/enums";
-import { routes } from "@/lib/routes";
 import { siteUrl } from "@/lib/site-url";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +39,8 @@ export function GetStartedGuide({
   website,
   sdkUrl,
   verifyAction,
-  initialPixelDetected,
+  startOnDone,
+  onDone,
 }: {
   website: {
     id: string;
@@ -52,9 +51,12 @@ export function GetStartedGuide({
   };
   sdkUrl: string;
   verifyAction: (state: FormState, formData: FormData) => Promise<FormState>;
-  initialPixelDetected: boolean;
+  /** Open straight on the final step, for a website already known to be set up. */
+  startOnDone: boolean;
+  /** Dismisses the guide. The caller decides what that means — closing its dialog, here. */
+  onDone: () => void;
 }) {
-  const [step, setStep] = useState<StepKey>(initialPixelDetected ? "done" : "install");
+  const [step, setStep] = useState<StepKey>(startOnDone ? "done" : "install");
   // Nothing is chosen by default — the WordPress instructions only appear once it is clicked.
   const [platformSelected, setPlatformSelected] = useState(false);
 
@@ -230,14 +232,10 @@ export function GetStartedGuide({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild>
-                  <Link href={routes.experiments.new(website.id)}>Create an experiment</Link>
-                </Button>
-                <Button variant="outline" asChild>
-                  <Link href={routes.websites.detail(website.id)}>View website</Link>
-                </Button>
-              </div>
+              {/* One way out, rather than two onward journeys. Someone who just finished setup
+                  wants to see it took effect; sending them straight into the experiment form
+                  skips the confirmation they came for. */}
+              <Button onClick={onDone}>Done</Button>
             </CardContent>
           </>
         ) : null}

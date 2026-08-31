@@ -138,21 +138,28 @@ enum EventType {
 /// A customer property. Owns experiments and visitors, and carries the public site id embedded
 /// in the tracking snippet.
 model Website {
-  id           String   @id @default(cuid())
-  userId       String
-  name         String
+  id              String       @id @default(cuid())
+  userId          String
+  name            String
   /// Primary domain, e.g. "acme.com". Used for the Origin soft-check on ingestion.
-  domain       String
+  domain          String
   /// Scheme this site is served over. Stored because `domain` is a bare hostname, so nothing
   /// else records whether the site is http or https — and every URL the UI prefills (the
   /// install check, experiment URL placeholders) has to guess otherwise. Defaults to https,
   /// which is right for everything except local development.
-  protocol     SiteProtocol @default(HTTPS)
+  protocol        SiteProtocol @default(HTTPS)
   /// Public identifier embedded in the install snippet ("rt_…"). An identifier, not a secret:
   /// it is visible in page source by design and grants no access beyond appending events.
-  publicSiteId String   @unique
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  publicSiteId    String       @unique
+  /// When the snippet was last confirmed present on a page of this website, by fetching that
+  /// page and finding the site id in its HTML. Null until the install check has passed once.
+  ///
+  /// Deliberately the timestamp of an *observation*, not a boolean "is installed": a customer
+  /// can remove the snippet at any time and nothing tells us, so this records when we last
+  /// looked and what we saw, which is all it can honestly claim.
+  pixelVerifiedAt DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   experiments Experiment[]
@@ -211,7 +218,7 @@ model Experiment {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  website     Website              @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  website     Website             @relation(fields: [websiteId], references: [id], onDelete: Cascade)
   variants    ExperimentVariant[]
   assignments Assignment[]
   events      Event[]

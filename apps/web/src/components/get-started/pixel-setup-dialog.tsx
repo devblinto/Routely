@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Rocket } from "lucide-react";
 
 import { GetStartedGuide } from "@/components/get-started/get-started-guide";
@@ -26,6 +28,7 @@ export function PixelSetupDialog({
   triggerLabel = "Set up Routely",
   triggerVariant = "default",
   triggerClassName,
+  alreadySetUp,
 }: {
   website: {
     id: string;
@@ -43,9 +46,26 @@ export function PixelSetupDialog({
   /** Lets a caller size the trigger — the websites table gives every row's buttons equal
    * width so the column lines up regardless of which label each row shows. */
   triggerClassName?: string;
+  /** True when this website is already set up, so the guide opens on its final step. */
+  alreadySetUp?: boolean;
 }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+
+  /**
+   * Closes the guide and re-reads the page behind it.
+   *
+   * The verify action revalidates the Get started path, but this dialog lives in a client
+   * component that is already mounted — without an explicit refresh the customer would close
+   * it and see the status they came here to change, unchanged.
+   */
+  function finish() {
+    setOpen(false);
+    router.refresh();
+  }
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" variant={triggerVariant} className={triggerClassName}>
           <Rocket aria-hidden />
@@ -65,7 +85,8 @@ export function PixelSetupDialog({
             website={website}
             sdkUrl={sdkUrl}
             verifyAction={verifyAction}
-            initialPixelDetected={false}
+            startOnDone={alreadySetUp ?? false}
+            onDone={finish}
           />
         </div>
       </DialogContent>
