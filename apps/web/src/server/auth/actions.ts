@@ -3,7 +3,7 @@
 import { redirect, unstable_rethrow } from "next/navigation";
 import { AuthError } from "next-auth";
 
-import { routes } from "@/lib/routes";
+import { AFTER_SIGN_IN, routes } from "@/lib/routes";
 import { signIn, signOut } from "@/server/auth";
 
 /**
@@ -15,11 +15,11 @@ import { signIn, signOut } from "@/server/auth";
 
 /** Where to send the user after signing in, defaulting to their experiments. */
 function safeCallbackUrl(value: FormDataEntryValue | null): string {
-  if (typeof value !== "string") return routes.experiments.list;
+  if (typeof value !== "string") return AFTER_SIGN_IN;
 
   // Only same-site relative paths. `//evil.example` is a protocol-relative URL that a naive
   // `startsWith("/")` check would accept as internal.
-  return value.startsWith("/") && !value.startsWith("//") ? value : routes.experiments.list;
+  return value.startsWith("/") && !value.startsWith("//") ? value : AFTER_SIGN_IN;
 }
 
 /**

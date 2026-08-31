@@ -7,7 +7,7 @@ import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { describeAuthError } from "@/lib/auth-errors";
-import { routes } from "@/lib/routes";
+import { AFTER_SIGN_IN } from "@/lib/routes";
 import { signInWithGoogle } from "@/server/auth/actions";
 import { getSession, isAuthConfigured } from "@/server/auth/session";
 
@@ -15,8 +15,8 @@ export const metadata: Metadata = { title: "Sign in" };
 
 /** Only same-site relative paths survive; see the matching guard in the sign-in action. */
 function safeCallbackUrl(value: string | undefined): string {
-  if (!value) return routes.experiments.list;
-  return value.startsWith("/") && !value.startsWith("//") ? value : routes.experiments.list;
+  if (!value) return AFTER_SIGN_IN;
+  return value.startsWith("/") && !value.startsWith("//") ? value : AFTER_SIGN_IN;
 }
 
 /**
@@ -42,7 +42,7 @@ export default async function LoginPage({
   const authError = describeAuthError(params.error);
 
   // Arriving with a callbackUrl means the visitor was stopped on the way somewhere.
-  const wasRedirected = callbackUrl !== routes.experiments.list;
+  const wasRedirected = callbackUrl !== AFTER_SIGN_IN;
 
   return (
     <div className="space-y-6">

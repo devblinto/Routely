@@ -5,7 +5,7 @@ import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 
 import { env } from "@/env";
-import { routes } from "@/lib/routes";
+import { AFTER_SIGN_IN, routes } from "@/lib/routes";
 import { db } from "@/server/db";
 
 /**
@@ -98,7 +98,7 @@ export const authConfig: NextAuthConfig = {
         // Fall through to the safe default.
       }
 
-      return `${baseUrl}${routes.experiments.list}`;
+      return `${baseUrl}${AFTER_SIGN_IN}`;
     },
   },
 

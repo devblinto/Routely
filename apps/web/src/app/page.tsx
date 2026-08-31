@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { routes } from "@/lib/routes";
+import { AFTER_SIGN_IN, routes } from "@/lib/routes";
 import { getSession } from "@/server/auth/session";
 
 /**
@@ -9,5 +9,5 @@ import { getSession } from "@/server/auth/session";
  */
 export default async function HomePage() {
   const session = await getSession();
-  redirect(session ? routes.experiments.list : routes.login);
+  redirect(session ? AFTER_SIGN_IN : routes.login);
 }

@@ -31,6 +31,18 @@ export const routes = {
   },
 } as const;
 
+/**
+ * Where a signed-in visitor lands when they had no particular destination.
+ *
+ * Named once, and referenced everywhere that decision is made — after signing in, on `/`, and
+ * as the fallback in the Auth.js redirect guard. Those four sites drifted apart the last time
+ * a route was renamed, which is the whole reason this file exists.
+ *
+ * An explicit `?callbackUrl=` still wins: someone who was stopped on the way to a specific page
+ * should be returned there, not deposited on the landing page having forgotten why they came.
+ */
+export const AFTER_SIGN_IN: string = routes.getStarted;
+
 /** Route prefixes that require an authenticated session. */
 export const PROTECTED_PREFIXES = ["/get-started", "/websites", "/experiments"] as const;
 
