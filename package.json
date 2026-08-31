@@ -27,7 +27,8 @@
     "db:studio": "npm run db:studio --workspace @routely/web",
     "db:seed": "npm run db:seed --workspace @routely/web",
     "db:verify": "npm run db:verify --workspace @routely/web",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "vercel-build": "npm run db:deploy && npm run build"
   },
   "devDependencies": {
     "prettier": "^3.9.6",

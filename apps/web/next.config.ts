@@ -8,10 +8,17 @@ const appDir = path.dirname(fileURLToPath(import.meta.url));
 /** Where the built SDK bundle actually lives, produced by `npm run sdk:build`. */
 const SDK_BUNDLE_PATH = "/sdk/v1/sdk.js";
 
+/**
+ * Vercel builds and packages the app itself, and rejects `output: "standalone"`.
+ * Self-hosting (Docker) needs it, so the mode is chosen by where the build is running rather
+ * than by committing to one target.
+ */
+const isVercel = process.env["VERCEL"] === "1";
+
 const nextConfig: NextConfig = {
-  // Emit a self-contained server bundle so the production Docker image can ship without
-  // node_modules (see infra/Dockerfile in Part 7).
-  output: "standalone",
+  // Emit a self-contained server bundle so a Docker image can ship without node_modules.
+  // Omitted on Vercel, which does its own tracing and packaging.
+  ...(isVercel ? {} : { output: "standalone" as const }),
 
   // In a workspace the tracer defaults to apps/web and would miss hoisted dependencies at the
   // repo root, producing a standalone build that cannot start.

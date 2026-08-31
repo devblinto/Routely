@@ -81,6 +81,7 @@ The public site id is an identifier, not a secret.
 | [docs/AUTH.md](docs/AUTH.md) | Auth.js setup, session strategy, route protection |
 | [docs/SDK-DEPLOYMENT.md](docs/SDK-DEPLOYMENT.md) | SDK build, hosting, visitor identity, conversions, and why time-on-page is approximate |
 | [CLAUDE.md](CLAUDE.md) | Full project context: locked stack, settled decisions, data-model invariants, gotchas |
+| [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md) | Deploying to Vercel: database, env vars, and what behaves differently there |
 
 ## Status
 
