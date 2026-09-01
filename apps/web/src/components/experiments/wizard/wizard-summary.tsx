@@ -22,10 +22,14 @@ import {
 import { armShares } from "@/lib/traffic";
 import { controlUrlsConflict, isSameSite, isSameUrl, normalizeUrl } from "@/lib/url";
 import { cn } from "@/lib/utils";
+import { PixelSetupDialog } from "@/components/get-started/pixel-setup-dialog";
+import type { FormState } from "@/lib/form-state";
 import { checkInstallOnPageAction, type InstallCheckResult } from "@/server/actions/pixel.actions";
 
 interface CheckResult {
   key: string;
+  /** Rendered beside the row: a way to act on what the check found, where one exists. */
+  action?: React.ReactNode;
   label: string;
   detail: string;
   status: "pass" | "warn" | "fail" | "pending";
@@ -191,10 +195,11 @@ function CheckRow({ check }: { check: CheckResult }) {
       >
         <Icon className={cn("size-3.5", check.status === "pending" && "animate-spin")} />
       </span>
-      <div className="min-w-0 space-y-0.5">
+      <div className="min-w-0 flex-1 space-y-0.5">
         <p className="text-sm font-medium">{check.label}</p>
         <p className="text-sm text-pretty text-muted-foreground">{check.detail}</p>
       </div>
+      {check.action ? <div className="shrink-0 self-center">{check.action}</div> : null}
     </li>
   );
 }
@@ -208,6 +213,8 @@ export function SummaryStep({
   dialogOpen,
   onDialogOpenChange,
   onBack,
+  sdkUrl,
+  verifyAction,
 }: {
   values: WizardValues;
   website: WizardWebsite | undefined;
@@ -217,6 +224,8 @@ export function SummaryStep({
   dialogOpen: boolean;
   onDialogOpenChange: (open: boolean) => void;
   onBack: () => void;
+  sdkUrl: string;
+  verifyAction: (state: FormState, formData: FormData) => Promise<FormState>;
 }) {
   const [install, setInstall] = useState<InstallState>({ phase: "idle" });
 
@@ -244,9 +253,30 @@ export function SummaryStep({
     setInstall({ phase: "done", result });
   }
 
+  const install_ = installCheck(install, values.controlUrl);
+
   const checks = [
     ...buildChecks(values, website, activeExperiments),
-    installCheck(install, values.controlUrl),
+    {
+      ...install_,
+      /*
+       * A failed install check is the one thing on this list the customer can fix without
+       * leaving — the others are configuration they would go back a step to change, while this
+       * one needs the snippet on their site. Opening the setup guide here means noticing the
+       * problem and fixing it are the same click, and the check re-runs when the dialog is
+       * reopened.
+       */
+      action:
+        install_.status === "warn" && website ? (
+          <PixelSetupDialog
+            website={website}
+            sdkUrl={sdkUrl}
+            verifyAction={verifyAction}
+            triggerLabel="Set up pixel"
+            triggerVariant="outline"
+          />
+        ) : undefined,
+    },
   ];
   const hasFailure = checks.some((check) => check.status === "fail");
 

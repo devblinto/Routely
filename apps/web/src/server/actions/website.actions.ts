@@ -42,7 +42,13 @@ export async function createWebsiteAction(
 
 export interface CreateWebsiteInlineState extends FormState {
   /** Present on success, for a caller that needs the created row without navigating away. */
-  website?: { id: string; name: string; domain: string; protocol: SiteProtocol };
+  website?: {
+    id: string;
+    name: string;
+    domain: string;
+    protocol: SiteProtocol;
+    publicSiteId: string;
+  };
 }
 
 /**
@@ -77,6 +83,7 @@ export async function createWebsiteInlineAction(
       name: result.data.name,
       domain: result.data.domain,
       protocol: result.data.protocol,
+      publicSiteId: result.data.publicSiteId,
     },
   };
 }

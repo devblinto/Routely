@@ -7,8 +7,10 @@ import { PageHeader } from "@/components/common/page-header";
 import { ExperimentWizard } from "@/components/experiments/wizard/experiment-wizard";
 import { AddWebsiteDialog } from "@/components/websites/add-website-dialog";
 import { Button } from "@/components/ui/button";
+import { env } from "@/env";
 import { routes } from "@/lib/routes";
 import { createExperimentAction } from "@/server/actions/experiment.actions";
+import { verifyPixelAction } from "@/server/actions/pixel.actions";
 import { requireUser } from "@/server/auth/session";
 import * as experimentService from "@/server/services/experiment.service";
 import * as websiteService from "@/server/services/website.service";
@@ -74,12 +76,15 @@ export default async function NewExperimentPage({
       ) : (
         <ExperimentWizard
           action={createExperimentAction}
-          websites={websites.map(({ id, name, domain, protocol }) => ({
+          websites={websites.map(({ id, name, domain, protocol, publicSiteId }) => ({
             id,
             name,
             domain,
             protocol,
+            publicSiteId,
           }))}
+          sdkUrl={env.SDK_URL}
+          verifyAction={verifyPixelAction}
           activeExperiments={activeExperiments.map((experiment) => ({
             id: experiment.id,
             name: experiment.name,

@@ -5,6 +5,8 @@ export interface WizardWebsite {
   name: string;
   domain: string;
   protocol: SiteProtocol;
+  /** Carried so the summary's failed install check can open the setup guide in place. */
+  publicSiteId: string;
 }
 
 /** The subset of an active experiment the summary step's conflict check needs. */

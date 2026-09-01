@@ -31,6 +31,8 @@ export interface CreatedWebsite {
   name: string;
   domain: string;
   protocol: SiteProtocol;
+  /** Needed by anything that offers pixel setup for a freshly created website. */
+  publicSiteId: string;
 }
 
 const DEFAULT_TRIGGER = (

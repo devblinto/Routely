@@ -68,11 +68,16 @@ export function ExperimentWizard({
   websites,
   activeExperiments,
   preselectedWebsiteId,
+  sdkUrl,
+  verifyAction,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   websites: WizardWebsite[];
   activeExperiments: WizardActiveExperiment[];
   preselectedWebsiteId?: string;
+  /** Passed through to the summary, whose install check can open the pixel setup guide. */
+  sdkUrl: string;
+  verifyAction: (state: FormState, formData: FormData) => Promise<FormState>;
 }) {
   const [state, formAction, isPending] = useActionState(action, IDLE);
   // Paired with the step-jumping below: the toast says what went wrong, the jump puts the
@@ -389,6 +394,8 @@ export function ExperimentWizard({
           <SummaryStep
             values={values}
             website={website}
+            sdkUrl={sdkUrl}
+            verifyAction={verifyAction}
             activeExperiments={activeExperiments}
             formId={FORM_ID}
             isPending={isPending}
