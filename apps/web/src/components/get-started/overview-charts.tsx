@@ -13,17 +13,16 @@ import type { OverviewCharts } from "@/server/services/overview.service";
  * at most a few dozen points, the app has no charting dependency today, and adding one for
  * this would ship a large bundle to every page for two small pictures.
  *
- * Colour is one hue per chart, drawn from the brand rather than from a separate chart palette:
- * secondary for visitors, primary for conversions. The pair was run through the palette
- * validator against both surfaces and passes every check in light mode; in dark the orange is
- * stepped down to L 0.645 to sit inside that mode's lightness band, which is what `--chart-1`
- * already encodes. Neither chart has a second series, so identity never rests on colour: the
- * title names the measure, and every bar carries a direct label.
+ * Colour is one hue per chart, taken from the validated categorical palette — blue for
+ * visitors, green for conversions — with a dark step for each, checked against both surfaces
+ * (lightness band, chroma floor, and ≥3:1 contrast all pass in light and dark). Neither chart
+ * has a second series, so identity never rests on colour: the title names the measure, and
+ * every bar carries a direct label.
  */
 
-/** The theme's own chart slots, so a brand change lands here without a second edit. */
-const VISITOR_COLOR = "text-(--chart-2)";
-const CONVERSION_COLOR = "text-(--chart-1)";
+/** Palette slot 1 (blue) and slot 6 (green), light/dark steps. */
+const VISITOR_COLOR = "text-[#2a78d6] dark:text-[#3987e5]";
+const CONVERSION_COLOR = "text-[#008300] dark:text-[#008300]";
 
 function CardShell({
   title,

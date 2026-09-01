@@ -12,9 +12,7 @@ import { cn } from "@/lib/utils";
  * Two deliberate choices:
  *
  * **It is always dark**, in both themes, so it reads as a distinct surface rather than as part
- * of the form. Its accent is the brand orange, which measures 6.25:1 against this panel's
- * near-black ground — comfortably legible, and the one place a fixed hex is correct because
- * the surface it sits on is fixed too. That means fixed colours instead of theme tokens, which is the one place in the
+ * of the form. That means fixed colours instead of theme tokens, which is the one place in the
  * app where that is correct: the panel is not chrome the user is working in, and a light
  * variant would leave the split invisible on a light background.
  *
@@ -65,7 +63,7 @@ function Arm({
 
       <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
         <div
-          className={cn("h-full rounded-full", leading ? "bg-[#F46300]" : "bg-white/25")}
+          className={cn("h-full rounded-full", leading ? "bg-emerald-400/80" : "bg-white/25")}
           style={{ width: `${share}%` }}
         />
       </div>
@@ -78,7 +76,7 @@ function Arm({
 function Point({ children }: { children: React.ReactNode }) {
   return (
     <li className="flex items-start gap-2.5">
-      <Check className="mt-0.5 size-3.5 shrink-0 text-[#F46300]" aria-hidden />
+      <Check className="mt-0.5 size-3.5 shrink-0 text-emerald-400/80" aria-hidden />
       <span className="text-sm leading-relaxed text-white/60">{children}</span>
     </li>
   );
@@ -97,7 +95,7 @@ export function AuthShowcase({ className }: { className?: string }) {
     >
       {/* Depth only: a warm pool of light behind the card, and a faint grid that fades out. */}
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-32 -right-24 size-[34rem] rounded-full bg-[#F46300]/[0.09] blur-3xl" />
+        <div className="absolute -top-32 -right-24 size-[34rem] rounded-full bg-emerald-500/[0.07] blur-3xl" />
         <div className="absolute -bottom-40 -left-32 size-[30rem] rounded-full bg-white/[0.04] blur-3xl" />
         <div className="absolute inset-0 [background-image:linear-gradient(to_right,rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.045)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_75%_60%_at_50%_40%,#000,transparent)] [background-size:56px_56px]" />
       </div>
@@ -128,8 +126,8 @@ export function AuthShowcase({ className }: { className?: string }) {
               <p className="truncate text-sm font-medium text-white/90">Pricing page rewrite</p>
               <p className="text-[11px] text-white/35">Example results</p>
             </div>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#F46300]/10 px-2.5 py-1 text-[11px] font-medium text-[#F46300] ring-1 ring-[#F46300]/25">
-              <span className="size-1.5 rounded-full bg-[#F46300]" />
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-400/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300/90 ring-1 ring-emerald-400/20">
+              <span className="size-1.5 rounded-full bg-emerald-400" />
               Running
             </span>
           </div>
@@ -145,7 +143,7 @@ export function AuthShowcase({ className }: { className?: string }) {
               <ArrowRight className="size-3" />
               <span className="font-mono text-white/70">/pricing-v2</span>
             </span>
-            <span className="rounded-md bg-[#F46300]/10 px-2 py-0.5 text-xs font-semibold text-[#F46300] tabular-nums">
+            <span className="rounded-md bg-emerald-400/10 px-2 py-0.5 text-xs font-semibold text-emerald-300/90 tabular-nums">
               +78%
             </span>
           </div>

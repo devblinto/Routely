@@ -37,10 +37,8 @@ function Stat({
   children?: React.ReactNode;
   className?: string;
 }) {
-  // Icon tints only, and deliberately not brand colours: they distinguish three cards at a
-  // glance, while the brand stays reserved for things you can act on.
   const tones = {
-    blue: "bg-muted text-muted-foreground",
+    blue: "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400",
     amber: "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
     green: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400",
   } as const;
@@ -166,9 +164,11 @@ export function OverviewCards({ stats }: { stats: OverviewStats }) {
           value={formatNumber(stats.liveExperiments)}
           unit="live experiments"
           action={
-            // The brand's own primary, not a tint of the card's icon colour: this is the same
-            // action as the page's header button, and one action should not have two looks.
-            <Button size="sm" asChild>
+            <Button
+              size="sm"
+              asChild
+              className="bg-amber-100 text-amber-900 hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:hover:bg-amber-500/25"
+            >
               <Link href={routes.experiments.new()}>New experiment</Link>
             </Button>
           }
@@ -186,7 +186,11 @@ export function OverviewCards({ stats }: { stats: OverviewStats }) {
           value={formatNumber(stats.draftExperiments)}
           unit={stats.draftExperiments === 1 ? "draft" : "drafts"}
           action={
-            <Button variant="outline" size="sm" asChild>
+            <Button
+              size="sm"
+              asChild
+              className="bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-200 dark:hover:bg-emerald-500/25"
+            >
               <Link href={`${routes.experiments.list}?status=draft`}>Review drafts</Link>
             </Button>
           }
