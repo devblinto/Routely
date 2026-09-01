@@ -5,12 +5,13 @@ import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * The wizard's step indicator, sized to sit in the app's 56px top bar.
+ * The wizard's step indicator, rendered as a section at the top of the wizard page.
  *
- * Compact by necessity: circles with the labels beside them rather than beneath, so the whole
- * strip fits on one line. Every label shows once there is room for it (`xl`), and below that
- * only the current step keeps its label — which is the one piece of orientation that actually
- * matters when space runs out.
+ * It used to sit in the app's 56px top bar, sharing that strip with the menu button and the
+ * wordmark, which is why labels were withheld until `xl`. In the page it has the full content
+ * width to itself, so they appear from `sm` — at which point the strip is orientation rather
+ * than decoration. Below that only the current step keeps its label, which is the one piece of
+ * orientation that still matters when space runs out.
  */
 
 export interface StepperItem {
@@ -83,7 +84,7 @@ export function WizardStepper({
                     "text-xs font-medium whitespace-nowrap",
                     // The current step keeps its label at every width; the rest appear once
                     // there is room, so the strip degrades to plain circles rather than wrapping.
-                    current ? "inline text-foreground" : "hidden text-muted-foreground xl:inline",
+                    current ? "inline text-foreground" : "hidden text-muted-foreground sm:inline",
                   )}
                 >
                   {item.label}

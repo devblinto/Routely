@@ -5,26 +5,27 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Brand } from "@/components/layout/brand";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { useNavbarSlot } from "@/components/layout/navbar-slot";
 import { SidebarAccount } from "@/components/layout/sidebar-account";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { cn } from "@/lib/utils";
 import type { SessionUser } from "@/server/auth/session";
 
 /**
- * Dashboard chrome: a fixed sidebar on large screens, a drawer below that, and a fixed top bar
- * that belongs to the page. Account identity and sign-out sit at the foot of the sidebar
- * rather than behind an avatar menu in the bar — the sidebar is the column about who you are
- * and where you can go, which leaves the bar free for whatever the current page publishes.
- * Pages render into `children` and control their own spacing only through the shared container
- * width; only `<main>` scrolls.
+ * Dashboard chrome: a fixed sidebar on large screens, a drawer below that. Pages render into
+ * `children` and control their own spacing only through the shared container width; only
+ * `<main>` scrolls.
+ *
+ * There is **no top bar on desktop**. Once account identity moved to the foot of the sidebar
+ * and the experiment wizard's stepper moved into its own page, the bar had nothing left in it
+ * — a 56px empty strip above every page. What remains is a slim bar below `lg`, which is not a
+ * leftover: at that width there is no sidebar, so the drawer's menu button and the wordmark
+ * have nowhere else to live.
  *
  * The sidebar collapses to an icon rail — state lives here, not in `localStorage`, since the
  * `(app)` layout keeps this component mounted across navigations within the group.
  */
 export function AppShell({ user, children }: { user: SessionUser; children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const navbarContent = useNavbarSlot();
 
   // `fixed inset-0` rather than a height: the shell manages its own scrolling in `<main>`, so
   // it must not also contribute height to the document. Taking it out of flow leaves `<body>`
@@ -77,14 +78,11 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur sm:px-6">
+        {/* Below `lg` only: the sidebar is a drawer there, and its trigger has to live
+         * somewhere. On `lg` and up this is not rendered at all. */}
+        <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur sm:px-6 lg:hidden">
           <MobileNav user={user} />
-          <div className="lg:hidden">
-            <Brand />
-          </div>
-          {/* Whatever the current page has published — see `navbar-slot.tsx`. Empty on most
-           * pages, which leaves the bar carrying only the mobile menu button and the mark. */}
-          <div className="min-w-0 flex-1">{navbarContent}</div>
+          <Brand />
         </header>
 
         {/*

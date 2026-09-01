@@ -19,7 +19,6 @@ import {
   hasErrors,
   requiredFieldErrors,
 } from "@/lib/wizard-required";
-import { NavbarSlot } from "@/components/layout/navbar-slot";
 import type {
   WizardActiveExperiment,
   WizardValues,
@@ -314,15 +313,13 @@ export function ExperimentWizard({
   return (
     <div className="space-y-6">
       {/*
-       * The steps live in the app's top bar, published through `NavbarSlot`. Below `md` the bar
-       * is already carrying the menu button and the wordmark, so the same stepper is rendered
-       * in the page instead — one component, whichever place has room for it.
+       * The steps are a section of the page. They were previously published into the app's top
+       * bar through a `NavbarSlot` store, which existed only because an App Router layout
+       * cannot receive anything from the page inside it. With the bar gone the indirection has
+       * nothing left to bridge, so the stepper simply renders where it belongs — above the
+       * thing it describes, at the width of the content it belongs to.
        */}
-      <NavbarSlot>
-        <div className="hidden md:block">{stepper}</div>
-      </NavbarSlot>
-
-      <div className="md:hidden">{stepper}</div>
+      <div className="rounded-xl border border-border bg-card px-4 py-3">{stepper}</div>
 
       <form id={FORM_ID} action={formAction} className="space-y-6">
         {/* Lives at form level rather than inside the configuration step: it is a single value
