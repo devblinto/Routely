@@ -289,17 +289,15 @@ persists locally, and strips them from the address bar with `history.replaceStat
 (b) never redirect when the normalized current URL already equals the normalized Variant URL,
 (c) a `sessionStorage` flag `rt.redir.<experimentId>` blocks a second redirect in the session.
 
-**Anti-flicker.** Built in Part 14. The design above (setting `opacity` on the root element)
-was replaced during implementation by a `<style>` element declaring a fixed-position
-`body::after` overlay — it covers the viewport regardless of document height, and it leaves the
-host page's own box model untouched, so lifting it cannot reflow the page.
+**Anti-flicker.** The overlay is created by a second inline script the customer pastes above
+the tracking tag, not by the bundle — see `SDK-DEPLOYMENT.md`. It declares a fixed-position
+`body::after` overlay, publishes `window.__routelyReveal`, and clears itself after
+`routelyTimeout` (1250 ms by default, editable on their page).
 
-The cloak is applied synchronously, before first paint, and only when the decision actually
-needs the network: a cached configuration is read synchronously, so in practice only the first
-page of a session is ever hidden. It is removed when the decision is made, or after a hard
-1250 ms timeout — the page can never stay hidden if the config request fails. A redirect
-deliberately keeps it up, because revealing the control page for the duration of the navigation
-is the exact flash the cloak exists to remove.
+The SDK only ends the wait early, calling `__routelyReveal()` once it knows the visitor is
+staying. A redirect deliberately does not, because revealing the control page for the duration
+of that navigation is the exact flash the script exists to remove. Keeping the timeout in the
+pasted script means a blocked or missing bundle can never leave a page hidden.
 
 ### Ingestion endpoint
 
@@ -425,8 +423,10 @@ parts are optional there today and become required in the part that introduces t
    intervals in the MVP.
 6. **Single Control + single Variant** — no multi-variant, no multivariate testing.
 7. **Redirect flicker is mitigated, not eliminated** on slow connections; the cloak times out
-   at 1250 ms in favour of showing the Control page. A configuration request slower than that
-   still produces a visible flash, bounded by however much slower it was.
+   at `routelyTimeout` (1250 ms by default) in favour of showing the Control page. A
+   configuration request slower than that still produces a visible flash, bounded by however
+   much slower it was. Sites that do not paste the anti-flickering script keep the flicker
+   entirely.
 8. **In-memory rate limiting** (single container). Multi-instance deployment needs a shared
    store.
 9. **Bot filtering is user-agent based** — cheap and imperfect; no IP reputation or

@@ -13,6 +13,9 @@ graph, no build step on their side — installation is one tag:
 <script src="https://cdn.example.com/sdk.js" data-site-id="rt_abc123"></script>
 ```
 
+The install screen pairs it with a short inline anti-flickering script above it, which is
+optional and covered in §5. Everything below concerns the bundle itself.
+
 That is what makes it framework-independent: it asks nothing of the host page beyond a
 `<script>` element, so the same file runs on WordPress, WooCommerce, React, Next.js, Shopify
 and hand-written HTML.
@@ -310,54 +313,64 @@ Per-site overrides, for debugging one installation without rebuilding:
 | `data-api` | build-time value | Override the API origin |
 | `data-timeout` | `3000` | Config request timeout, in ms |
 | `data-debug` | `false` | Log decisions to the console |
-| `data-cloak` | `true` | Set to `"false"` to disable the anti-flicker cloak |
-| `data-cloak-timeout` | `1250` | Hard ceiling on how long the page may stay hidden, in ms |
-| `data-cloak-background` | `#fff` | Colour shown while hidden — set it on a dark site |
 
-### The anti-flicker cloak
+### The anti-flickering script
 
 A redirect test has an unavoidable race. The tag is synchronous, so the SDK runs before the
 page paints — but the *decision* needs the experiment configuration, and that is a network
 request. While it is in flight the browser carries on parsing and paints the control page, so
-a visitor bound for the variant sees the wrong page for as long as the request took. On a
-warm connection that is a flash; on a cold serverless start it was measured at about a second.
+a visitor bound for the variant sees the wrong page for as long as the request took. On a warm
+connection that is a flash; on a cold serverless start it was measured at about a second.
 
-The SDK hides the page until the decision is made. Three things about how, because each was a
-choice against a plausible alternative:
+The fix is to hide the page until the decision is made. **That overlay is created by a second
+inline script the customer pastes above the tag, not by the bundle.** The install screen shows
+both blocks together and they are copied as one.
 
-**It is inside the bundle, not a second snippet.** Mida ships two scripts: an inline
-anti-flicker block the customer pastes above the tracking tag, plus the tag itself. That is
-forced on them because their tag is `async` — it may not have executed by first paint, so
-something else has to do the hiding. Ours is synchronous by design, so the SDK is already
-running before paint and can hide the page itself. Installation stays one tag, and a customer
-cannot end up with the flicker fix half-installed.
+```html
+<!-- Routely anti-flickering script -->
+<script>
+var routelyTimeout = 1250;
+!function(d,w,i,t){ /* … creates #routely-cloak, publishes w.__routelyReveal, clears after t */ }
+(document,window,"routely-cloak",routelyTimeout);
+</script>
 
-**It does not touch the host page's styles.** The published Mida snippet sets
-`position:relative;overflow:hidden` on `body` and paints a `body::after` overlay positioned
-against it. That mutates the customer's layout, and undoing it can reflow the page visibly at
-exactly the moment you are trying to make things look calm. Routely's overlay is
-`position:fixed`, so it covers the viewport regardless of document height and the host page's
-box model never participates. Every declaration is `!important`, because the customer's own
-stylesheets are linked *after* our element in document order and would otherwise win on equal
-specificity.
+<!-- Routely tracking script (place in <head>) -->
+<script src="https://cdn.example.com/sdk.js" data-site-id="rt_abc123"></script>
+```
 
-**It is skipped when it is not needed.** The configuration is cached in `sessionStorage`, and
-a cache hit is read synchronously — no request, no waiting, nothing to hide. Only a page load
-that actually goes to the network is cloaked, which in practice means the first page of a
-session. Every subsequent page renders with no cloak at all.
+The SDK's only involvement is ending the wait early: it calls `window.__routelyReveal()` the
+moment it knows the visitor is staying. A redirect deliberately does *not* call it — the page
+is being replaced, and revealing the control page for the duration of that navigation is the
+exact flash the script exists to remove.
 
-The failure mode that matters is a cloak that never lifts, because that is a blank site.
-Four things prevent it: a hard timeout that removes the overlay regardless of what else
-happens; a single exit funnel in `boot()` so every code path reveals; a `try`/`catch` around
-every DOM call, each returning a handle whose `reveal()` is safe to call; and the fact that
-failing to cloak at all degrades to the old behaviour rather than to a broken page.
+Three reasons it lives in the page rather than the bundle:
 
-Verified against headless Chrome over the DevTools Protocol: probed mid-decision, the overlay
-is present and painting (`rgb(255, 255, 255)`, `position: fixed`) over a control page whose
-markup has already rendered; on redirect the cloak is never lifted and the visitor goes
-straight to the variant; with no matching experiment it lifts as soon as the config lands; and
-with a config deliberately slower than the cap it lifts itself at the cap with the decision
-still pending.
+1. **It runs earlier than any bundle can.** There is no network request in front of an inline
+   script, so it takes effect at parse time even when the CDN is slow.
+2. **The timings belong to the customer.** `routelyTimeout` and the `#fff` background are plain
+   values at the top of the script on their own page. A dark site, or a site on slow hosting,
+   is a one-character edit — not a redeploy of ours, and not one number baked into a bundle
+   that every customer shares.
+3. **It lifts even if the SDK never arrives.** The timeout belongs to the pasted script, so a
+   blocked, failed, or missing bundle cannot leave a page hidden. This is the failure that
+   actually matters: a cloak that never lifts is a blank site, which is far worse than the
+   flicker it replaces.
+
+Installing the anti-flickering script is optional. Omit it and the tracking still works
+exactly as before — you simply keep the flicker.
+
+**Implementation notes.** Every declaration is `!important`, because the customer's own
+stylesheets are linked *after* this element in document order and would otherwise win on equal
+specificity. The overlay is a `position:fixed` `body::after` rather than styles applied to
+`body` itself — Mida's published snippet sets `position:relative;overflow:hidden` on the body,
+which mutates the host layout and can reflow visibly when it is undone; a fixed pseudo-element
+covers the viewport regardless of document height and the host box model never participates.
+
+**Verified in headless Chrome** against the snippet the dashboard actually generates: with the
+config held at 900 ms the overlay is painting at 300 ms and 600 ms and is *never* lifted, the
+visitor going straight to the variant; with no matching experiment the SDK lifts it at 904 ms,
+as soon as the configuration lands; and **with the tracking script removed entirely the snippet
+lifts itself at exactly 1250 ms.**
 
 ---
 

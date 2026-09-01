@@ -1,19 +1,15 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { ArrowLeft, Check } from "lucide-react";
+import { Check } from "lucide-react";
 
-import { PlatformGrid } from "@/components/get-started/platform-grid";
+import { ManualInstall } from "@/components/get-started/manual-install";
 import { SubmitButton } from "@/components/common/submit-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  PlacementRules,
-  WordPressInstallGuide,
-} from "@/components/websites/wordpress-install-guide";
 import { IDLE, type FormState } from "@/lib/form-state";
 import type { SiteProtocol } from "@/generated/prisma/enums";
 import { siteUrl } from "@/lib/site-url";
@@ -57,8 +53,6 @@ export function GetStartedGuide({
   onDone: () => void;
 }) {
   const [step, setStep] = useState<StepKey>(startOnDone ? "done" : "install");
-  // Nothing is chosen by default — the WordPress instructions only appear once it is clicked.
-  const [platformSelected, setPlatformSelected] = useState(false);
 
   // Wrapping the action lets the guide advance to "done" the moment verification succeeds,
   // without a useEffect watching the result — the transition belongs with the action that
@@ -126,39 +120,17 @@ export function GetStartedGuide({
         {step === "install" ? (
           <>
             <CardHeader>
-              <CardTitle>
-                {platformSelected ? "Install on WordPress" : "Install the tracking pixel"}
-              </CardTitle>
+              <CardTitle>Install the code</CardTitle>
               <CardDescription>
-                {platformSelected
-                  ? "Paste this snippet into your site, then follow the placement rules below."
-                  : "Routely only ships a WordPress install today — every other platform below is on the way. Pick one to see its steps."}
+                Two script tags in your <code className="font-mono text-xs">&lt;head&gt;</code>. The
+                same code works on every platform — there is nothing to configure per site.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {platformSelected ? (
-                <div className="space-y-6">
-                  <button
-                    type="button"
-                    onClick={() => setPlatformSelected(false)}
-                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <ArrowLeft className="size-3.5" aria-hidden />
-                    Back to platforms
-                  </button>
-                  <WordPressInstallGuide sdkUrl={sdkUrl} publicSiteId={website.publicSiteId} />
-                  <PlacementRules />
-                </div>
-              ) : (
-                <PlatformGrid
-                  selected={platformSelected}
-                  onSelect={() => setPlatformSelected(true)}
-                />
-              )}
+              <ManualInstall sdkUrl={sdkUrl} publicSiteId={website.publicSiteId} />
+
               <div className="flex justify-end">
-                <Button disabled={!platformSelected} onClick={() => setStep("verify")}>
-                  Continue
-                </Button>
+                <Button onClick={() => setStep("verify")}>Next: verify installation</Button>
               </div>
             </CardContent>
           </>
