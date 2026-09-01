@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { useFormToast } from "@/hooks/use-form-toast";
 import { Loader2, Trash2 } from "lucide-react";
 
 import {
@@ -44,6 +45,7 @@ export function DeleteExperimentDialog({
   hasResults: boolean;
 }) {
   const [state, formAction, isPending] = useActionState(action, IDLE);
+  useFormToast(state);
   const formId = `delete-experiment-${experimentId}`;
 
   return (
@@ -70,12 +72,6 @@ export function DeleteExperimentDialog({
               It cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-
-          {state.status === "error" && state.message ? (
-            <p role="alert" className="text-sm text-destructive">
-              {state.message}
-            </p>
-          ) : null}
 
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>

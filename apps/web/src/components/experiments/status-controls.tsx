@@ -1,9 +1,9 @@
 "use client";
 
 import { useActionState } from "react";
+import { useFormToast } from "@/hooks/use-form-toast";
 import { Archive, Loader2, Pause, Play } from "lucide-react";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { IDLE, type FormState } from "@/lib/form-state";
 
@@ -40,6 +40,7 @@ export function StatusControls({
   allowed: readonly Status[];
 }) {
   const [state, formAction, isPending] = useActionState(action, IDLE);
+  useFormToast(state);
 
   if (allowed.length === 0) {
     return (
@@ -74,12 +75,6 @@ export function StatusControls({
           );
         })}
       </form>
-
-      {state.status === "error" && state.message ? (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
-      ) : null}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useFormToast } from "@/hooks/use-form-toast";
 
 import {
   AudienceStep,
@@ -75,6 +76,9 @@ export function ExperimentWizard({
   preselectedWebsiteId?: string;
 }) {
   const [state, formAction, isPending] = useActionState(action, IDLE);
+  // Paired with the step-jumping below: the toast says what went wrong, the jump puts the
+  // customer where they can fix it.
+  useFormToast(state);
   /**
    * Arriving with a website already chosen — from the websites table's "New experiment" button,
    * which links to `?websiteId=` — skips straight to Profile. Step 1 is marked complete rather
@@ -391,7 +395,6 @@ export function ExperimentWizard({
             activeExperiments={activeExperiments}
             formId={FORM_ID}
             isPending={isPending}
-            state={state}
             dialogOpen={dialogOpen}
             onDialogOpenChange={openReview}
             onBack={back}

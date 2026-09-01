@@ -10,7 +10,6 @@ import {
   type WizardValues,
   type WizardWebsite,
 } from "@/components/experiments/wizard/wizard-types";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,7 +19,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import type { FormState } from "@/lib/form-state";
 import { armShares } from "@/lib/traffic";
 import { controlUrlsConflict, isSameSite, isSameUrl, normalizeUrl } from "@/lib/url";
 import { cn } from "@/lib/utils";
@@ -207,7 +205,6 @@ export function SummaryStep({
   activeExperiments,
   formId,
   isPending,
-  state,
   dialogOpen,
   onDialogOpenChange,
   onBack,
@@ -217,7 +214,6 @@ export function SummaryStep({
   activeExperiments: WizardActiveExperiment[];
   formId: string;
   isPending: boolean;
-  state: FormState;
   dialogOpen: boolean;
   onDialogOpenChange: (open: boolean) => void;
   onBack: () => void;
@@ -283,13 +279,6 @@ export function SummaryStep({
                     : "Everything checks out — warnings below won't block creating a draft."}
                 </DialogDescription>
               </DialogHeader>
-
-              {state.status === "error" && state.message ? (
-                <Alert variant="destructive" role="alert">
-                  <AlertTitle>Could not create the experiment</AlertTitle>
-                  <AlertDescription>{state.message}</AlertDescription>
-                </Alert>
-              ) : null}
 
               <ul className="divide-y divide-border/70 border-t border-border/70">
                 {checks.map((check) => (

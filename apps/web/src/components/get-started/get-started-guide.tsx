@@ -1,11 +1,11 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useFormToast } from "@/hooks/use-form-toast";
 import { Check } from "lucide-react";
 
 import { ManualInstall } from "@/components/get-started/manual-install";
 import { SubmitButton } from "@/components/common/submit-button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -66,6 +66,10 @@ export function GetStartedGuide({
   }
 
   const [state, formAction] = useActionState(verifyAndAdvance, IDLE);
+  // The failure message is instructional — check the <head>, clear the cache — so it must not
+  // vanish on a timer while the customer is acting on it. `useFormToast` gives errors no
+  // duration, so this one stays until dismissed.
+  useFormToast(state, { success: "Snippet found — your pixel is connected." });
 
   const stepIndex = STEPS.findIndex((item) => item.key === step);
 
@@ -148,13 +152,6 @@ export function GetStartedGuide({
             <CardContent className="space-y-5">
               <form action={formAction} className="space-y-5">
                 <input type="hidden" name="websiteId" value={website.id} />
-
-                {state.status === "error" && state.message ? (
-                  <Alert variant="destructive" role="alert">
-                    <AlertTitle>Snippet not found</AlertTitle>
-                    <AlertDescription>{state.message}</AlertDescription>
-                  </Alert>
-                ) : null}
 
                 <div className="space-y-2">
                   <Label htmlFor="verify-url">Page to check</Label>

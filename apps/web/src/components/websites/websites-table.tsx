@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import { useFormToast } from "@/hooks/use-form-toast";
 import Link from "next/link";
 import { CheckCircle2, CircleAlert, FlaskConical, Loader2, Plus, Trash2 } from "lucide-react";
 
@@ -191,6 +192,8 @@ function DeleteSelected({
   const [state, formAction, isPending] = useActionState(action, IDLE);
   const formId = "delete-selected-websites";
 
+  useFormToast(state);
+
   /**
    * Clearing the selection has to happen in an effect, not in render: `onDeleted` updates the
    * table above this component, and React forbids updating another component mid-render. The
@@ -252,12 +255,6 @@ function DeleteSelected({
               </li>
             ))}
           </ul>
-
-          {state.status === "error" && state.message ? (
-            <p role="alert" className="text-sm text-destructive">
-              {state.message}
-            </p>
-          ) : null}
 
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>

@@ -1,11 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
+import { useFormToast } from "@/hooks/use-form-toast";
 import Link from "next/link";
 
 import { Field } from "@/components/common/field";
 import { SubmitButton } from "@/components/common/submit-button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DomainField } from "@/components/websites/domain-field";
@@ -41,23 +41,11 @@ export function WebsiteForm({
   cancelHref?: string;
 }) {
   const [state, formAction] = useActionState(action, IDLE);
+  useFormToast(state);
 
   return (
     <form action={formAction} className="space-y-5">
       {websiteId ? <input type="hidden" name="websiteId" value={websiteId} /> : null}
-
-      {state.status === "error" && state.message ? (
-        <Alert variant="destructive" role="alert">
-          <AlertTitle>Could not save</AlertTitle>
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {state.status === "success" && state.message ? (
-        <Alert role="status">
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
-      ) : null}
 
       <Field
         name="name"

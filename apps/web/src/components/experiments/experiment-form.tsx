@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useFormToast } from "@/hooks/use-form-toast";
 import Link from "next/link";
 import { Plus, Target, X } from "lucide-react";
 
@@ -75,6 +76,7 @@ export function ExperimentForm({
   cancelHref?: string;
 }) {
   const [state, formAction] = useActionState(action, IDLE);
+  useFormToast(state);
   const [controlMatchType, setControlMatchType] = useState(defaults.controlMatchType);
   const [conversionMatchType, setConversionMatchType] = useState(defaults.conversionMatchType);
   const [primaryMetric, setPrimaryMetric] = useState(defaults.primaryMetric);
@@ -128,19 +130,6 @@ export function ExperimentForm({
       <input type="hidden" name="conversionMatchType" value={conversionMatchType} />
       <input type="hidden" name="primaryMetric" value={primaryMetric} />
       <input type="hidden" name="controlWeight" value={controlWeight} />
-
-      {state.status === "error" && state.message ? (
-        <Alert variant="destructive" role="alert">
-          <AlertTitle>Could not save</AlertTitle>
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {state.status === "success" && state.message ? (
-        <Alert role="status">
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
-      ) : null}
 
       <div className="space-y-5">
         <Field

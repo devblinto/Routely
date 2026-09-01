@@ -1,13 +1,13 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import { useFormToast } from "@/hooks/use-form-toast";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 
 import { Field } from "@/components/common/field";
 import { SubmitButton } from "@/components/common/submit-button";
 import { DomainField } from "@/components/websites/domain-field";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -59,6 +59,7 @@ function AddWebsiteForm({
   onCancel: () => void;
 }) {
   const [state, formAction] = useActionState(createWebsiteInlineAction, IDLE);
+  useFormToast(state);
 
   // Which result has already been acted on. A ref rather than state: this drives no rendering,
   // and it keeps the effect idempotent when it re-runs because `onSuccess` changed identity
@@ -76,13 +77,6 @@ function AddWebsiteForm({
 
   return (
     <form action={formAction} className="space-y-5">
-      {state.status === "error" && state.message ? (
-        <Alert variant="destructive" role="alert">
-          <AlertTitle>Could not save</AlertTitle>
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
-      ) : null}
-
       <Field
         name="name"
         label="Name"

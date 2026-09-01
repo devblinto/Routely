@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { useFormToast } from "@/hooks/use-form-toast";
 import { Loader2, Pause, Play } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ export function PublishPauseButton({
   status: Status;
 }) {
   const [state, formAction, isPending] = useActionState(action, IDLE);
+  useFormToast(state);
 
   if (status === "ARCHIVED") return null;
 
@@ -37,7 +39,7 @@ export function PublishPauseButton({
   const Icon = publishing ? Play : Pause;
 
   return (
-    <form action={formAction} className="relative">
+    <form action={formAction}>
       <input type="hidden" name="experimentId" value={experimentId} />
       <input type="hidden" name="status" value={publishing ? "ACTIVE" : "PAUSED"} />
 
@@ -46,21 +48,10 @@ export function PublishPauseButton({
         size="sm"
         variant={publishing ? "default" : "outline"}
         disabled={isPending}
-        aria-describedby={state.status === "error" ? `${experimentId}-error` : undefined}
       >
         {isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Icon aria-hidden />}
         {publishing ? "Publish" : "Pause"}
       </Button>
-
-      {state.status === "error" && state.message ? (
-        <p
-          id={`${experimentId}-error`}
-          role="alert"
-          className="absolute top-full right-0 z-10 mt-1 w-64 text-xs text-destructive"
-        >
-          {state.message}
-        </p>
-      ) : null}
     </form>
   );
 }

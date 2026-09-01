@@ -1,10 +1,10 @@
 "use client";
 
 import { useActionState } from "react";
+import { useFormToast } from "@/hooks/use-form-toast";
 import { Link2, Loader2, RefreshCw, X } from "lucide-react";
 
 import { CopyValue } from "@/components/websites/copy-value";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { IDLE, type FormState } from "@/lib/form-state";
@@ -35,7 +35,13 @@ export function SharePanel({
   const [rotateState, rotateAction, rotating] = useActionState(rotate, IDLE);
   const [disableState, disableAction, disabling] = useActionState(disable, IDLE);
 
-  const state = [rotateState, disableState, enableState].find((s) => s.status !== "idle");
+  // Toasted individually rather than through the derived `state` below: that picks the first
+  // non-idle result in a fixed order, so once one action had run the other two could never
+  // announce their own outcome.
+  useFormToast(enableState);
+  useFormToast(rotateState);
+  useFormToast(disableState);
+
   const busy = enabling || rotating || disabling;
 
   return (
@@ -50,12 +56,6 @@ export function SharePanel({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {state?.message ? (
-          <Alert variant={state.status === "error" ? "destructive" : "default"} role="status">
-            <AlertDescription>{state.message}</AlertDescription>
-          </Alert>
-        ) : null}
-
         {shareUrl ? (
           <>
             <CopyValue value={shareUrl} label="Copy share link" />
