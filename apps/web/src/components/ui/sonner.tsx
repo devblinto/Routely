@@ -18,9 +18,9 @@ export function Toaster(props: ToasterProps) {
   return (
     <Sonner
       position="bottom-right"
-      // Long enough to read a sentence without hunting for it, short enough not to sit over
-      // the page. Errors override this — see `use-form-toast`.
-      duration={4000}
+      // Applies to successes and errors alike. Kept here as the single place the timing is
+      // set, so changing it does not mean hunting for a second value elsewhere.
+      duration={3000}
       closeButton
       toastOptions={{
         classNames: {
