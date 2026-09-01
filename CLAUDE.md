@@ -344,6 +344,18 @@ npm run db:verify                  # 16-check data-model smoke test against live
 npm run sdk:build                  # size-budgeted SDK build
 ```
 
+**Local and production are configured independently and need no switching.** `apps/web/.env`
+holds local values only; production values live in the Vercel project's environment variables,
+and `.vercelignore` keeps every `.env` off the build machine. `env.ts` derives `AUTH_URL` and
+`NEXT_PUBLIC_APP_URL` from `VERCEL_PROJECT_PRODUCTION_URL` when they are unset, so a deployment
+cannot inherit a localhost value.
+
+`db:reset` and `db:seed` run `scripts/assert-local-db.mjs` first, which aborts unless
+`DATABASE_URL` resolves to a local host. `.env` did once point at production Neon — with a
+duplicate `DATABASE_URL` line, so the local one *looked* right while the second silently won —
+which aimed a command that drops every table at production data. `db:deploy` is deliberately
+**not** guarded: that is how Vercel applies migrations during `vercel-build`.
+
 Tests: **129** — 100 in the SDK, 29 in the app. Both run under Vitest in a Node environment.
 
 ---
