@@ -304,6 +304,9 @@ export function SummaryStep({
               verifyAction={verifyAction}
               triggerLabel="Set up pixel"
               triggerVariant="outline"
+              /* The guide verifies the page this check is about, not the site root — otherwise
+                 it reports success on a page the check never looks at. */
+              verifyUrl={values.controlUrl}
             />
             {/* Installing the snippet happens on the customer's own site, in another tab or
              * another system entirely — so the answer can change without anything here

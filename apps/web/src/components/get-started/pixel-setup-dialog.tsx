@@ -29,6 +29,7 @@ export function PixelSetupDialog({
   triggerVariant = "default",
   triggerClassName,
   alreadySetUp,
+  verifyUrl,
 }: {
   website: {
     id: string;
@@ -48,6 +49,8 @@ export function PixelSetupDialog({
   triggerClassName?: string;
   /** True when this website is already set up, so the guide opens on its final step. */
   alreadySetUp?: boolean;
+  /** Page the Verify step should check, when the caller opened this about a specific one. */
+  verifyUrl?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -85,6 +88,7 @@ export function PixelSetupDialog({
             website={website}
             sdkUrl={sdkUrl}
             verifyAction={verifyAction}
+            verifyUrl={verifyUrl}
             startOnDone={alreadySetUp ?? false}
             onDone={finish}
           />

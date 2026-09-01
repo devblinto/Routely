@@ -35,6 +35,7 @@ export function GetStartedGuide({
   website,
   sdkUrl,
   verifyAction,
+  verifyUrl,
   startOnDone,
   onDone,
 }: {
@@ -47,6 +48,14 @@ export function GetStartedGuide({
   };
   sdkUrl: string;
   verifyAction: (state: FormState, formData: FormData) => Promise<FormState>;
+  /**
+   * Page the Verify step checks, when the caller has a particular one in mind.
+   *
+   * The wizard's pre-publish check opens this guide about a *specific* page — the experiment's
+   * control URL — so verifying the site root instead would answer a different question and
+   * report success while the check that sent them here still fails.
+   */
+  verifyUrl?: string;
   /** Open straight on the final step, for a website already known to be set up. */
   startOnDone: boolean;
   /** Dismisses the guide. The caller decides what that means — closing its dialog, here. */
@@ -159,8 +168,8 @@ export function GetStartedGuide({
                     <Input
                       id="verify-url"
                       name="url"
-                      defaultValue={siteUrl(website)}
-                      placeholder={siteUrl(website)}
+                      defaultValue={verifyUrl ?? siteUrl(website)}
+                      placeholder={verifyUrl ?? siteUrl(website)}
                       inputMode="url"
                       autoComplete="off"
                       autoCapitalize="none"
