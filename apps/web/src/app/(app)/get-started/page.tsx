@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Globe, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
-import { EmptyState } from "@/components/common/empty-state";
 import { OverviewCards } from "@/components/get-started/overview-cards";
 import { OverviewChartCards } from "@/components/get-started/overview-charts";
 import { PageHeader } from "@/components/common/page-header";
-import { AddWebsiteDialog } from "@/components/websites/add-website-dialog";
 import { WebsitesTable } from "@/components/websites/websites-table";
 import { Button } from "@/components/ui/button";
 import { env } from "@/env";
@@ -20,7 +18,12 @@ import * as websiteService from "@/server/services/website.service";
 export const metadata: Metadata = { title: "Get started" };
 
 /**
- * The Get started entry point: every website the account owns, with its install state.
+ * The Get started entry point: the account's figures, its websites and their install state.
+ *
+ * The page has one shape whether or not any websites exist yet. An account on its first visit
+ * sees the dashboard it will have tomorrow with one thing missing and named, rather than a
+ * different screen that vanishes the moment a website is added — and the zeroes above are
+ * true, not placeholders.
  *
  * Previously this scoped the whole page to one website chosen through `?websiteId=`, which
  * answered "how do I set up this site" but not "which of my sites still need setting up" —
@@ -37,32 +40,6 @@ export default async function GetStartedPage() {
     overviewService.getOverviewStats(user.id),
     overviewService.getOverviewCharts(user.id),
   ]);
-
-  if (entries.length === 0) {
-    return (
-      <>
-        <PageHeader
-          title="Get started"
-          description="Add a website to get a tracking snippet, then install it to start running experiments."
-        />
-        <EmptyState
-          icon={Globe}
-          title="No websites yet"
-          description="Create a website first — the setup guide installs its tracking pixel."
-          action={
-            <AddWebsiteDialog
-              trigger={
-                <Button>
-                  <Plus aria-hidden />
-                  Add website
-                </Button>
-              }
-            />
-          }
-        />
-      </>
-    );
-  }
 
   return (
     <>

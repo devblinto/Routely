@@ -3,7 +3,15 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormToast } from "@/hooks/use-form-toast";
 import Link from "next/link";
-import { CheckCircle2, CircleAlert, FlaskConical, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  CheckCircle2,
+  CircleAlert,
+  FlaskConical,
+  Globe,
+  Loader2,
+  Plus,
+  Trash2,
+} from "lucide-react";
 
 import { PixelSetupDialog } from "@/components/get-started/pixel-setup-dialog";
 import { AddWebsiteDialog } from "@/components/websites/add-website-dialog";
@@ -325,7 +333,7 @@ export function WebsitesTable({
           ) : null}
           <AddWebsiteDialog
             trigger={
-              <Button variant="ghost" size="sm">
+              <Button size="sm">
                 <Plus aria-hidden />
                 Add website
               </Button>
@@ -335,11 +343,13 @@ export function WebsitesTable({
       </header>
 
       {/* Column labels only where the row is laid out in columns. Below `sm` each row stacks
-          and the values carry their own sub-labels instead. */}
+          and the values carry their own sub-labels instead — and with no rows at all there are
+          no columns to label. */}
       <div
         className={cn(
           ROW_GRID,
-          "hidden border-b border-border/70 px-4 py-2 text-xs font-medium text-muted-foreground sm:grid",
+          "hidden border-b border-border/70 px-4 py-2 text-xs font-medium text-muted-foreground",
+          entries.length > 0 && "sm:grid",
         )}
       >
         <Checkbox
@@ -355,18 +365,50 @@ export function WebsitesTable({
         <span className="text-right">Actions</span>
       </div>
 
-      <div className="divide-y divide-border/70">
-        {entries.map((entry) => (
-          <WebsiteRow
-            key={entry.website.id}
-            entry={entry}
-            selected={selectedIds.includes(entry.website.id)}
-            onSelectedChange={(selected) => toggle(entry.website.id, selected)}
-            sdkUrl={sdkUrl}
-            verifyAction={verifyAction}
+      {entries.length === 0 ? (
+        /*
+         * The empty case keeps the page's shape rather than replacing it. An account with no
+         * websites yet is looking at the same dashboard it will have tomorrow, with one thing
+         * missing and named — which reads as a starting point instead of as a different screen
+         * that disappears once the first website exists.
+         */
+        <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
+          <span
+            aria-hidden
+            className="grid size-10 place-items-center rounded-full bg-muted text-muted-foreground"
+          >
+            <Globe className="size-5" />
+          </span>
+          <div className="space-y-1">
+            <p className="text-sm font-medium">No websites yet</p>
+            <p className="mx-auto max-w-sm text-sm text-balance text-muted-foreground">
+              Add a website to get its tracking snippet. Everything above fills in once it starts
+              recording visitors.
+            </p>
+          </div>
+          <AddWebsiteDialog
+            trigger={
+              <Button size="sm">
+                <Plus aria-hidden />
+                Add website
+              </Button>
+            }
           />
-        ))}
-      </div>
+        </div>
+      ) : (
+        <div className="divide-y divide-border/70">
+          {entries.map((entry) => (
+            <WebsiteRow
+              key={entry.website.id}
+              entry={entry}
+              selected={selectedIds.includes(entry.website.id)}
+              onSelectedChange={(selected) => toggle(entry.website.id, selected)}
+              sdkUrl={sdkUrl}
+              verifyAction={verifyAction}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
