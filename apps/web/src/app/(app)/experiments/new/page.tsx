@@ -34,14 +34,16 @@ export default async function NewExperimentPage({
 
   return (
     /*
-     * Held to 1000px and left-aligned, against the full-width shell every other page uses.
+     * Held to 1000px and centred in the content area, against the full-width shell every other
+     * page uses.
      *
      * The wizard is a form, not a table: its inputs have a natural size, so the extra width a
-     * wide monitor offers is width the fields cannot use. Left-aligned rather than centred so
-     * the column starts where the sidebar ends — a centred block would drift right as the
-     * window widens and stop lining up with the page it sits next to.
+     * wide monitor offers is width the fields cannot use. Centring keeps the column in the
+     * middle of the space it has rather than hugging the sidebar, which is what a single
+     * focused task wants — the trade being that it no longer shares a left edge with the pages
+     * around it.
      */
-    <div className="w-full max-w-[1000px] space-y-6">
+    <div className="mx-auto w-full max-w-[1000px] space-y-6">
       <PageHeader
         eyebrow={
           <Link href={backHref} className="inline-flex items-center gap-1 hover:text-foreground">
