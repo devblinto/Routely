@@ -51,6 +51,35 @@ export interface OverviewStats {
   year: number;
 }
 
+/** Days of history behind the visitors chart. */
+export const VISITOR_TREND_DAYS = 30;
+
+export interface ExperimentConversions {
+  experimentId: string;
+  name: string;
+  conversions: number;
+}
+
+export interface VisitorDay {
+  /** Local calendar day, midnight. */
+  date: Date;
+  /** Distinct visitors assigned an arm that day. */
+  visitors: number;
+}
+
+export interface OverviewCharts {
+  /** Running experiments and what each converted this year, largest first. */
+  conversionsByExperiment: ExperimentConversions[];
+  conversionsTotal: number;
+  year: number;
+
+  /** One entry per day for the last `VISITOR_TREND_DAYS`, including days with none. */
+  visitorTrend: VisitorDay[];
+  visitorTotal: number;
+  visitorDailyAverage: number;
+  trendDays: number;
+}
+
 /** First instant of the current month, in the server's timezone. */
 function startOfMonth(now: Date): Date {
   return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -58,6 +87,95 @@ function startOfMonth(now: Date): Date {
 
 function startOfYear(now: Date): Date {
   return new Date(now.getFullYear(), 0, 1);
+}
+
+/** Midnight local time on the day `daysAgo` days before `now`. */
+function startOfDay(now: Date, daysAgo = 0): Date {
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo);
+}
+
+function dayKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+/**
+ * The two charts below the websites table.
+ *
+ * Split from `getOverviewStats` rather than folded into it because the two answer different
+ * questions and a page could reasonably want one without the other — and because this one
+ * reads rows rather than counting them, so it is the half worth being able to skip.
+ */
+export async function getOverviewCharts(
+  actorUserId: string,
+  now: Date = new Date(),
+): Promise<OverviewCharts> {
+  const ownedExperiment = { experiment: { website: { userId: actorUserId } } };
+  const yearStart = startOfYear(now);
+  // Inclusive of today, so 30 days means today plus the 29 before it.
+  const trendStart = startOfDay(now, VISITOR_TREND_DAYS - 1);
+
+  const [running, conversionRows, assignmentRows] = await Promise.all([
+    db.experiment.findMany({
+      where: { status: "ACTIVE", website: { userId: actorUserId } },
+      select: { id: true, name: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    db.conversion.groupBy({
+      by: ["experimentId"],
+      where: { ...ownedExperiment, occurredAt: { gte: yearStart } },
+      _count: { _all: true },
+    }),
+    // Rows rather than a grouped count, because "unique visitors per day" needs
+    // `count(distinct visitorId)` per day and Prisma's `groupBy` cannot express it. Two columns
+    // over 30 days is cheap at the volumes this product handles; if an account ever outgrows
+    // that, this is the one place that has to become raw SQL.
+    db.assignment.findMany({
+      where: { ...ownedExperiment, assignedAt: { gte: trendStart } },
+      select: { visitorId: true, assignedAt: true },
+    }),
+  ]);
+
+  const conversionsById = new Map(conversionRows.map((row) => [row.experimentId, row._count._all]));
+
+  const conversionsByExperiment = running
+    .map((experiment) => ({
+      experimentId: experiment.id,
+      name: experiment.name,
+      conversions: conversionsById.get(experiment.id) ?? 0,
+    }))
+    // Largest first: the chart is a comparison, and an ordered bar chart is read in one pass.
+    .sort((a, b) => b.conversions - a.conversions);
+
+  // A Set per day, so a visitor bucketed into two experiments on the same day counts once —
+  // which is what "unique visitors" has to mean for the number to be worth showing.
+  const visitorsByDay = new Map<string, Set<string>>();
+  for (const row of assignmentRows) {
+    const key = dayKey(row.assignedAt);
+    const bucket = visitorsByDay.get(key) ?? new Set<string>();
+    bucket.add(row.visitorId);
+    visitorsByDay.set(key, bucket);
+  }
+
+  // Every day is emitted, including empty ones: a gap in a time series must read as "nobody
+  // came", not as a shorter axis.
+  const visitorTrend: VisitorDay[] = [];
+  for (let offset = VISITOR_TREND_DAYS - 1; offset >= 0; offset--) {
+    const date = startOfDay(now, offset);
+    visitorTrend.push({ date, visitors: visitorsByDay.get(dayKey(date))?.size ?? 0 });
+  }
+
+  const visitorTotal = visitorTrend.reduce((sum, day) => sum + day.visitors, 0);
+
+  return {
+    conversionsByExperiment,
+    conversionsTotal: conversionsByExperiment.reduce((sum, row) => sum + row.conversions, 0),
+    year: now.getFullYear(),
+
+    visitorTrend,
+    visitorTotal,
+    visitorDailyAverage: visitorTotal / VISITOR_TREND_DAYS,
+    trendDays: VISITOR_TREND_DAYS,
+  };
 }
 
 export async function getOverviewStats(

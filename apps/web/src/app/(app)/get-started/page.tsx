@@ -4,6 +4,7 @@ import { Globe, Plus } from "lucide-react";
 
 import { EmptyState } from "@/components/common/empty-state";
 import { OverviewCards } from "@/components/get-started/overview-cards";
+import { OverviewChartCards } from "@/components/get-started/overview-charts";
 import { PageHeader } from "@/components/common/page-header";
 import { AddWebsiteDialog } from "@/components/websites/add-website-dialog";
 import { WebsitesTable } from "@/components/websites/websites-table";
@@ -31,9 +32,10 @@ export default async function GetStartedPage() {
   const user = await requireUser();
   // Fetched together: both describe the same account, and running them in sequence would make
   // the first screen after signing in wait for two round trips instead of one.
-  const [entries, stats] = await Promise.all([
+  const [entries, stats, charts] = await Promise.all([
     websiteService.listWebsitesWithStatus(user.id),
     overviewService.getOverviewStats(user.id),
+    overviewService.getOverviewCharts(user.id),
   ]);
 
   if (entries.length === 0) {
@@ -85,6 +87,8 @@ export default async function GetStartedPage() {
         verifyAction={verifyPixelAction}
         deleteAction={deleteWebsitesAction}
       />
+
+      <OverviewChartCards charts={charts} />
     </>
   );
 }
