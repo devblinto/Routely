@@ -6,15 +6,18 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Brand } from "@/components/layout/brand";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { useNavbarSlot } from "@/components/layout/navbar-slot";
+import { SidebarAccount } from "@/components/layout/sidebar-account";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
-import { UserMenu } from "@/components/layout/user-menu";
 import { cn } from "@/lib/utils";
 import type { SessionUser } from "@/server/auth/session";
 
 /**
  * Dashboard chrome: a fixed sidebar on large screens, a drawer below that, and a fixed top bar
- * carrying the account menu. Pages render into `children` and control their own spacing only
- * through the shared container width; only `<main>` scrolls.
+ * that belongs to the page. Account identity and sign-out sit at the foot of the sidebar
+ * rather than behind an avatar menu in the bar — the sidebar is the column about who you are
+ * and where you can go, which leaves the bar free for whatever the current page publishes.
+ * Pages render into `children` and control their own spacing only through the shared container
+ * width; only `<main>` scrolls.
  *
  * The sidebar collapses to an icon rail — state lives here, not in `localStorage`, since the
  * `(app)` layout keeps this component mounted across navigations within the group.
@@ -52,6 +55,8 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
           <SidebarNav collapsed={collapsed} />
         </div>
 
+        <SidebarAccount user={user} collapsed={collapsed} />
+
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}
@@ -73,14 +78,13 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur sm:px-6">
-          <MobileNav />
+          <MobileNav user={user} />
           <div className="lg:hidden">
             <Brand />
           </div>
           {/* Whatever the current page has published — see `navbar-slot.tsx`. Empty on most
-           * pages, which leaves this as the spacer that pushes the account menu right. */}
+           * pages, which leaves the bar carrying only the mobile menu button and the mark. */}
           <div className="min-w-0 flex-1">{navbarContent}</div>
-          <UserMenu user={user} />
         </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
