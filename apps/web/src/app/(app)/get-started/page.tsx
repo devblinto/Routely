@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Globe, Plus } from "lucide-react";
 
 import { EmptyState } from "@/components/common/empty-state";
+import { OverviewCards } from "@/components/get-started/overview-cards";
 import { PageHeader } from "@/components/common/page-header";
 import { AddWebsiteDialog } from "@/components/websites/add-website-dialog";
 import { WebsitesTable } from "@/components/websites/websites-table";
@@ -12,6 +13,7 @@ import { routes } from "@/lib/routes";
 import { verifyPixelAction } from "@/server/actions/pixel.actions";
 import { deleteWebsitesAction } from "@/server/actions/website.actions";
 import { requireUser } from "@/server/auth/session";
+import * as overviewService from "@/server/services/overview.service";
 import * as websiteService from "@/server/services/website.service";
 
 export const metadata: Metadata = { title: "Get started" };
@@ -27,7 +29,12 @@ export const metadata: Metadata = { title: "Get started" };
  */
 export default async function GetStartedPage() {
   const user = await requireUser();
-  const entries = await websiteService.listWebsitesWithStatus(user.id);
+  // Fetched together: both describe the same account, and running them in sequence would make
+  // the first screen after signing in wait for two round trips instead of one.
+  const [entries, stats] = await Promise.all([
+    websiteService.listWebsitesWithStatus(user.id),
+    overviewService.getOverviewStats(user.id),
+  ]);
 
   if (entries.length === 0) {
     return (
@@ -69,6 +76,8 @@ export default async function GetStartedPage() {
           </Button>
         }
       />
+
+      <OverviewCards stats={stats} />
 
       <WebsitesTable
         entries={entries}
