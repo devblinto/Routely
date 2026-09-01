@@ -17,11 +17,24 @@ import type { FormState } from "@/lib/form-state";
  * away from the field and then take it away on a timer. Only `state.message` — the outcome of
  * the action as a whole — is surfaced here.
  *
- * Errors are given a longer life than successes and are dismissed by the user. A success
- * confirms something they just did and can be missed harmlessly; a failure usually asks them
- * to do something differently, and removing that on a timer means reproducing the error to
- * read it again.
+ * Errors are given a longer life than successes, but both clear on their own. A success
+ * confirms something the user just did and can be missed harmlessly; a failure usually asks
+ * them to do something differently and is often a sentence or two, so it gets roughly double
+ * the time to read before it goes. Either can be dismissed early with the close button.
+ *
+ * The trade this accepts: a failure the user looks away from is gone when they look back, and
+ * re-reading it means triggering it again. Where a message is genuinely instructional rather
+ * than informational, prefer keeping it on the page next to the control that produced it.
  */
+
+/**
+ * How long a failure stays on screen.
+ *
+ * Longer than the 4s the Toaster gives a success, because an error message is usually a
+ * sentence explaining what to do rather than three words confirming what happened, and a
+ * notice that leaves before it can be read is the same as no notice at all.
+ */
+const ERROR_DURATION_MS = 8000;
 export function useFormToast(
   state: FormState,
   options: { success?: string; error?: string } = {},
@@ -45,7 +58,7 @@ export function useFormToast(
       // A failure carrying only field errors is already rendered beside the fields; a toast
       // would repeat it somewhere less useful.
       const text = options.error ?? state.message;
-      if (text) toast.error(text, { duration: Infinity });
+      if (text) toast.error(text, { duration: ERROR_DURATION_MS });
     }
   }, [state, options.success, options.error]);
 }
