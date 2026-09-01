@@ -210,6 +210,32 @@ measures.
 
 ---
 
+### Brand palette
+
+| Role | Value | Foreground | Why that foreground |
+| --- | --- | --- | --- |
+| `--primary` | `#F46300` `oklch(0.675 0.196 44.1)` | near-black | White on this orange is **3.17:1** and fails AA; near-black is **6.25:1** |
+| `--secondary` | `#556BCE` `oklch(0.561 0.154 271.2)` | white | White on it is **4.79:1**, which passes |
+
+Both steps are **identical in light and dark**. Against the dark card they measure 4.84:1 and
+3.20:1 as surfaces, which clears the 3:1 a non-text component needs, and their foregrounds are
+unchanged. Lightening the blue for dark mode was tried and rejected: it lifts the surface but
+pushes white text below 4.5:1, which is the worse trade.
+
+`--ring` is the orange (3.17:1 — above the 3:1 for a non-text component). The chart slots are
+the brand: `--chart-1` orange, `--chart-2` blue. `--chart-1` is stepped down to `L 0.645`
+(`#eb5d00`) in dark mode so it sits inside the lightness band the palette validator enforces;
+the light step at `L 0.675` is just above it.
+
+**Run the validator before changing any of this** — see the `dataviz` skill's
+`scripts/validate_palette.js`. The current pair passes every check in both modes.
+
+Status colours (emerald for good, amber for waiting, red for destructive) are deliberately
+*not* brand colours: they mean a state, and reusing the brand for them would make "orange"
+mean both "act on this" and "something is pending".
+
+---
+
 ## 6. Data model invariants
 
 These constraints carry the product's guarantees. **Do not weaken them.**
