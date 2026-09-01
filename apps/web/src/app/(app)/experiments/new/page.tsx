@@ -33,7 +33,15 @@ export default async function NewExperimentPage({
   const backHref = preselected ? routes.websites.detail(preselected.id) : routes.experiments.list;
 
   return (
-    <>
+    /*
+     * Held to 1000px and left-aligned, against the full-width shell every other page uses.
+     *
+     * The wizard is a form, not a table: its inputs have a natural size, so the extra width a
+     * wide monitor offers is width the fields cannot use. Left-aligned rather than centred so
+     * the column starts where the sidebar ends — a centred block would drift right as the
+     * window widens and stop lining up with the page it sits next to.
+     */
+    <div className="w-full max-w-[1000px] space-y-6">
       <PageHeader
         eyebrow={
           <Link href={backHref} className="inline-flex items-center gap-1 hover:text-foreground">
@@ -80,6 +88,6 @@ export default async function NewExperimentPage({
           preselectedWebsiteId={preselected?.id}
         />
       )}
-    </>
+    </div>
   );
 }
