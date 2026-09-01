@@ -20,7 +20,11 @@ export const routes = {
   share: (token: string) => `/share/${encodeURIComponent(token)}`,
 
   /** Conversion goals across every experiment, viewed as a list of measurable actions. */
-  metrics: "/metrics",
+  metrics: {
+    list: "/metrics",
+    /** A goal's setup page. Addressed by its experiment, because a goal has no id of its own. */
+    detail: (experimentId: string) => `/metrics/${encodeURIComponent(experimentId)}`,
+  },
 
   experiments: {
     /** The experiments list — also where the app lands a signed-in visitor with no more

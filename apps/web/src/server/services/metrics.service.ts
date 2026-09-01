@@ -29,13 +29,19 @@ export type MetricState = "collecting" | "waiting" | "paused" | "draft" | "archi
 export interface Metric {
   /** The experiment the goal belongs to — a goal has no identity of its own. */
   experimentId: string;
+  /** The goal's own label, falling back to the experiment's name when unset. */
   name: string;
+  /** The experiment's name, always — shown as the row's second line. */
+  experimentName: string;
+  websiteId: string;
   websiteName: string;
   kind: MetricKind;
   matchType: UrlMatchType;
   url: string;
   status: ExperimentStatus;
   state: MetricState;
+  /** URLs are frozen once an experiment leaves DRAFT, so the goal can only be renamed. */
+  urlEditable: boolean;
   conversions24h: number;
   conversionsTotal: number;
   lastConversionAt: Date | null;
@@ -78,6 +84,7 @@ export async function listMetrics(
         ? {
             OR: [
               { name: { contains: search, mode: "insensitive" as const } },
+              { conversionName: { contains: search, mode: "insensitive" as const } },
               { conversionUrl: { contains: search, mode: "insensitive" as const } },
             ],
           }
@@ -87,10 +94,11 @@ export async function listMetrics(
       id: true,
       name: true,
       status: true,
+      conversionName: true,
       conversionUrl: true,
       conversionMatchType: true,
       createdAt: true,
-      website: { select: { name: true } },
+      website: { select: { id: true, name: true } },
     },
   });
 
@@ -127,13 +135,16 @@ export async function listMetrics(
 
     return {
       experimentId: experiment.id,
-      name: experiment.name,
+      name: experiment.conversionName?.trim() || experiment.name,
+      experimentName: experiment.name,
+      websiteId: experiment.website.id,
       websiteName: experiment.website.name,
       kind: "PAGEVIEW",
       matchType: experiment.conversionMatchType,
       url: experiment.conversionUrl,
       status: experiment.status,
       state: stateOf(experiment.status, conversionsTotal),
+      urlEditable: experiment.status === "DRAFT",
       conversions24h: recentById.get(experiment.id) ?? 0,
       conversionsTotal,
       lastConversionAt: latestById.get(experiment.id) ?? null,
@@ -167,4 +178,31 @@ export function countDuplicateGoals(metrics: Metric[]): number {
     seen.set(key, (seen.get(key) ?? 0) + 1);
   }
   return [...seen.values()].filter((count) => count > 1).length;
+}
+
+/** One goal, for the setup page. `null` when the actor does not own it. */
+export async function getMetric(actorUserId: string, experimentId: string): Promise<Metric | null> {
+  const all = await listMetrics(actorUserId, {});
+  return all.find((candidate) => candidate.experimentId === experimentId) ?? null;
+}
+
+/**
+ * Deletes the experiments behind the given goals.
+ *
+ * Named for what it does rather than for the row the customer clicked. A goal is a required
+ * field on an experiment — an experiment without one can never record a conversion — so there
+ * is no "delete the goal but keep the test". Every surface that offers this says so before
+ * asking for confirmation.
+ */
+export async function deleteMetrics(actorUserId: string, experimentIds: string[]): Promise<number> {
+  if (experimentIds.length === 0) return 0;
+
+  // The tenant filter participates in the write itself rather than in a prior read, so an id
+  // the actor does not own deletes nothing instead of being caught by a check that could be
+  // skipped.
+  const result = await db.experiment.deleteMany({
+    where: { id: { in: experimentIds }, website: { userId: actorUserId } },
+  });
+
+  return result.count;
 }

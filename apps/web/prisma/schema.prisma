@@ -186,6 +186,10 @@ model Experiment {
   controlUrl       String
   controlMatchType UrlMatchType @default(EXACT)
 
+  /// Label for the conversion goal, shown on the Metrics list. Nullable because every
+  /// experiment created before goals were nameable has one and needs no backfill — the UI
+  /// falls back to the experiment's own name.
+  conversionName      String?
   conversionUrl       String
   conversionMatchType UrlMatchType @default(EXACT)
 

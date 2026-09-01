@@ -213,6 +213,7 @@ export async function updateExperiment(
         url: variant.url,
         weight: variant.weight,
       })),
+      conversionName: existing.conversionName ?? undefined,
       conversionUrl: existing.conversionUrl,
       conversionMatchType: existing.conversionMatchType,
       primaryMetric: existing.primaryMetric,
@@ -265,7 +266,11 @@ export async function updateExperiment(
     const result = await experimentRepo.updateExperiment(
       experimentId,
       actorUserId,
-      { ...data, description: data.description ?? null },
+      {
+        ...data,
+        description: data.description ?? null,
+        conversionName: data.conversionName ?? null,
+      },
       tx,
     );
 

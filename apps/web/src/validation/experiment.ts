@@ -42,6 +42,8 @@ const experimentFields = z.object({
   controlWeight: armWeightSchema.default(50),
   variants: z.array(experimentVariantSchema).min(1, "At least one variant is required"),
 
+  /** Label for the goal. Optional — the UI falls back to the experiment's name. */
+  conversionName: z.string().trim().max(120, "Must be 120 characters or fewer").optional(),
   conversionUrl: absoluteUrlSchema,
   conversionMatchType: urlMatchTypeSchema.default("EXACT"),
   primaryMetric: primaryMetricSchema.default("CONVERSION_RATE"),

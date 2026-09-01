@@ -9,6 +9,7 @@ import { MetricsTable } from "@/components/metrics/metrics-table";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/lib/routes";
 import { requireUser } from "@/server/auth/session";
+import { deleteMetricsAction } from "@/server/actions/metrics.actions";
 import * as metricsService from "@/server/services/metrics.service";
 
 export const metadata: Metadata = { title: "Metrics" };
@@ -111,7 +112,7 @@ export default async function MetricsPage({
               No metrics match these filters.
             </p>
           ) : (
-            <MetricsTable metrics={metrics} />
+            <MetricsTable metrics={metrics} deleteAction={deleteMetricsAction} />
           )}
 
           {duplicates > 0 && !isFiltered ? (
