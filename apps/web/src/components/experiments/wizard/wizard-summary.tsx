@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Check, Loader2, X } from "lucide-react";
+import { AlertTriangle, Check, Loader2, RefreshCw, X } from "lucide-react";
 
 import { WizardStepCard } from "@/components/experiments/wizard/wizard-step-card";
 import {
@@ -37,7 +37,11 @@ interface CheckResult {
 
 /** The install check's lifecycle, kept separate from the rules computed synchronously. */
 type InstallState =
-  { phase: "idle" } | { phase: "checking" } | { phase: "done"; result: InstallCheckResult };
+  | { phase: "idle" }
+  /** `previous` is the verdict still on screen while a re-check runs, so the row's own
+   *  controls do not vanish underneath the click that started it. */
+  | { phase: "checking"; previous?: InstallCheckResult }
+  | { phase: "done"; result: InstallCheckResult };
 
 /**
  * The pre-publish checklist, computed entirely client-side from values already on screen plus
@@ -230,14 +234,12 @@ export function SummaryStep({
   const [install, setInstall] = useState<InstallState>({ phase: "idle" });
 
   /**
-   * Runs when the dialog opens — from the event handler rather than an effect, so opening is
-   * what triggers the request rather than a render reacting to state that already changed.
-   * Re-checked on every open, since the control URL may have been edited in between.
+   * Loads the control URL and looks for the snippet.
+   *
+   * Shared by the dialog opening and the row's own refresh button, so "check again" cannot
+   * drift from "check on open" — they are the same request against the same URL.
    */
-  async function handleOpenChange(open: boolean) {
-    onDialogOpenChange(open);
-    if (!open) return;
-
+  async function runInstallCheck() {
     // Nothing to fetch until the control URL is a real address; `installCheck` explains the
     // idle state rather than reporting a failure the customer cannot act on.
     if (!website || normalizeUrl(values.controlUrl) === null) {
@@ -245,7 +247,10 @@ export function SummaryStep({
       return;
     }
 
-    setInstall({ phase: "checking" });
+    setInstall((current) => ({
+      phase: "checking",
+      previous: current.phase === "done" ? current.result : undefined,
+    }));
     const result = await checkInstallOnPageAction({
       websiteId: website.id,
       url: values.controlUrl,
@@ -253,7 +258,27 @@ export function SummaryStep({
     setInstall({ phase: "done", result });
   }
 
+  /**
+   * Runs when the dialog opens — from the event handler rather than an effect, so opening is
+   * what triggers the request rather than a render reacting to state that already changed.
+   * Re-checked on every open, since the control URL may have been edited in between.
+   */
+  async function handleOpenChange(open: boolean) {
+    onDialogOpenChange(open);
+    if (open) await runInstallCheck();
+  }
+
   const install_ = installCheck(install, values.controlUrl);
+
+  // The last settled verdict, which outlives an in-flight re-check.
+  const settled =
+    install.phase === "done"
+      ? install.result
+      : install.phase === "checking"
+        ? install.previous
+        : undefined;
+  const installNeedsFixing =
+    settled !== undefined && (settled.ok === false || !settled.snippetFound);
 
   const checks = [
     ...buildChecks(values, website, activeExperiments),
@@ -266,15 +291,37 @@ export function SummaryStep({
        * problem and fixing it are the same click, and the check re-runs when the dialog is
        * reopened.
        */
+      /*
+       * Shown while a re-check is in flight too, judged on the verdict still displayed — a
+       * button that disappears the moment it is pressed is a button that looks broken.
+       */
       action:
-        install_.status === "warn" && website ? (
-          <PixelSetupDialog
-            website={website}
-            sdkUrl={sdkUrl}
-            verifyAction={verifyAction}
-            triggerLabel="Set up pixel"
-            triggerVariant="outline"
-          />
+        installNeedsFixing && website ? (
+          <div className="flex items-center gap-2">
+            <PixelSetupDialog
+              website={website}
+              sdkUrl={sdkUrl}
+              verifyAction={verifyAction}
+              triggerLabel="Set up pixel"
+              triggerVariant="outline"
+            />
+            {/* Installing the snippet happens on the customer's own site, in another tab or
+             * another system entirely — so the answer can change without anything here
+             * changing. Re-checking in place beats closing the dialog to make it run again. */}
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={runInstallCheck}
+              disabled={install.phase === "checking"}
+              aria-label="Check the script installation again"
+            >
+              <RefreshCw
+                className={cn("size-4", install.phase === "checking" && "animate-spin")}
+                aria-hidden
+              />
+            </Button>
+          </div>
         ) : undefined,
     },
   ];
