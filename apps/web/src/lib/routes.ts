@@ -19,6 +19,9 @@ export const routes = {
   /** Public, token-addressed results page. Deliberately outside the protected prefixes. */
   share: (token: string) => `/share/${encodeURIComponent(token)}`,
 
+  /** Conversion goals across every experiment, viewed as a list of measurable actions. */
+  metrics: "/metrics",
+
   experiments: {
     /** The experiments list — also where the app lands a signed-in visitor with no more
      * specific destination, now that there is no separate dashboard route. */
@@ -44,7 +47,12 @@ export const routes = {
 export const AFTER_SIGN_IN: string = routes.getStarted;
 
 /** Route prefixes that require an authenticated session. */
-export const PROTECTED_PREFIXES = ["/get-started", "/websites", "/experiments"] as const;
+export const PROTECTED_PREFIXES = [
+  "/get-started",
+  "/websites",
+  "/experiments",
+  "/metrics",
+] as const;
 
 export function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some(
