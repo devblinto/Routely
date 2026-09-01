@@ -87,8 +87,18 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
           <div className="min-w-0 flex-1">{navbarContent}</div>
         </header>
 
+        {/*
+         * Content fills the width the sidebar leaves it. There was a `max-w-6xl` centring
+         * wrapper here, which on a wide monitor left a band of empty page down both sides of
+         * tables that had columns to spare — a reading-width cap is right for prose and wrong
+         * for a data table. Line length is still capped where it matters: `PageHeader` holds
+         * its description to `max-w-2xl`.
+         *
+         * The padding stays. It is margin, not a cap, and content flush to the viewport edge
+         * reads as a layout bug rather than as more room.
+         */}
         <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          <div className="mx-auto w-full max-w-6xl space-y-6">{children}</div>
+          <div className="w-full space-y-6">{children}</div>
         </main>
       </div>
     </div>
